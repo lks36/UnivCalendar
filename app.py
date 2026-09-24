@@ -30,9 +30,14 @@ _sync_status = {"running": False, "last_result": None}
 @app.route("/")
 def index():
     groups = get_course_groups()
+    total_courses = sum(len(d["courses"]) for d in groups)
     selected = get_selection()
     return render_template(
-        "index.html", groups=groups, selected=selected, sync_status=_sync_status
+        "index.html",
+        groups=groups,
+        total_courses=total_courses,
+        selected=selected,
+        sync_status=_sync_status,
     )
 
 
@@ -59,12 +64,12 @@ def _run_sync_background():
             models.replace_events(events)
             selected = get_selected_events()
             write_ics_file(selected)
-            _sync_status["last_result"] = f"成功，抓到 {len(events)} 条事件"
+            _sync_status["last_result"] = f"Synchronisation réussie : {len(events)} événements récupérés"
         else:
-            _sync_status["last_result"] = "同步失败：没有抓到任何事件，请检查网络/凭证"
+            _sync_status["last_result"] = "Échec : aucun événement récupéré, vérifiez la connexion/les identifiants"
     except Exception as e:
         logger.exception("同步出错")
-        _sync_status["last_result"] = f"同步出错：{e}"
+        _sync_status["last_result"] = f"Erreur de synchronisation : {e}"
     finally:
         _sync_status["running"] = False
 
@@ -73,14 +78,14 @@ def _run_sync_background():
 def api_sync():
     """手动触发一次全量同步（后台线程执行，避免网页卡住）"""
     if _sync_lock.locked() or _sync_status["running"]:
-        return jsonify({"ok": False, "message": "已经有一个同步任务在跑，请稍候"}), 409
+        return jsonify({"ok": False, "message": "Une synchronisation est déjà en cours, veuillez patienter"}), 409
 
     def _target():
         with _sync_lock:
             _run_sync_background()
 
     threading.Thread(target=_target, daemon=True).start()
-    return jsonify({"ok": True, "message": "同步已在后台开始，刷新页面查看结果"})
+    return jsonify({"ok": True, "message": "Synchronisation lancée en arrière-plan, actualisez la page pour voir le résultat"})
 
 
 @app.route("/api/sync-status")

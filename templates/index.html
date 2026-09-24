@@ -11,8 +11,8 @@
     <div class="topbar-inner">
       <h1>Mon emploi du temps</h1>
       <div class="sync-block">
-        <span id="sync-status" class="sync-status">{{ sync_status.last_result or '尚未手动同步过' }}</span>
-        <button id="sync-btn" class="btn btn-ghost">重新抓取官方课表</button>
+        <span id="sync-status" class="sync-status">{{ sync_status.last_result or "Pas encore synchronisé" }}</span>
+        <button id="sync-btn" class="btn btn-ghost">Resynchroniser</button>
       </div>
     </div>
   </header>
@@ -20,44 +20,50 @@
   <main class="layout">
     <section class="panel">
       <div class="panel-head">
-        <input id="search" type="text" placeholder="搜索课程名称、代码..." autocomplete="off">
-        <span class="count" id="course-count">{{ groups|length }} 门课程</span>
+        <input id="search" type="text" placeholder="Rechercher un cours, un code..." autocomplete="off">
+        <span class="count" id="course-count">{{ total_courses }} cours</span>
       </div>
 
       <div id="course-list" class="course-list">
         {% for g in groups %}
-        <div class="course-card" data-key="{{ g.course_key|lower }}">
-          <div class="course-title">
-            <span class="course-name">{{ g.course_key }}</span>
-            <span class="course-cal">{{ g.calendar_path }}</span>
-          </div>
-          <div class="session-row">
-            {% for s in g.sessions %}
-            <label class="chip">
-              <input type="checkbox"
-                     data-course="{{ g.course_key }}"
-                     data-session="{{ s }}"
-                     {% if (g.course_key, s) in selected %}checked{% endif %}>
-              <span>{{ s }}</span>
-            </label>
+        <details class="direction-block">
+          <summary class="direction-title">{{ g.master_group }} <span class="direction-count">({{ g.courses|length }})</span></summary>
+          <div class="direction-courses">
+            {% for c in g.courses %}
+            <div class="course-card" data-key="{{ (c.course_key ~ ' ' ~ g.master_group)|lower }}">
+              <div class="course-title">
+                <span class="course-name">{{ c.course_key }}</span>
+              </div>
+              <div class="session-row">
+                {% for session_key, session_label in c.sessions %}
+                <label class="chip">
+                  <input type="checkbox"
+                         data-course="{{ c.course_key }}"
+                         data-session="{{ session_key }}"
+                         {% if (c.course_key, session_key) in selected %}checked{% endif %}>
+                  <span>{{ session_label }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
             {% endfor %}
           </div>
-        </div>
+        </details>
         {% endfor %}
       </div>
     </section>
 
     <aside class="side">
       <div class="side-card">
-        <h2>我的课表</h2>
-        <p class="side-hint">勾选左侧课程和对应的组，点击下方按钮生成订阅文件。</p>
-        <button id="save-btn" class="btn btn-primary">保存并生成 .ics</button>
+        <h2>Ma sélection</h2>
+        <p class="side-hint">Cochez vos cours et groupes ci-contre, puis générez votre fichier d'abonnement.</p>
+        <button id="save-btn" class="btn btn-primary">Enregistrer et générer le .ics</button>
         <div id="save-result" class="save-result"></div>
 
         <div class="subscribe-block">
-          <h3>订阅地址</h3>
+          <h3>Lien d'abonnement</h3>
           <code id="ics-url">{{ request.host_url }}mon_emploi_du_temps.ics</code>
-          <p class="side-hint small">把这个地址加到手机/电脑日历 App 的"订阅日历"里，以后就不用再打开这个页面。</p>
+          <p class="side-hint small">Ajoutez ce lien dans l'app Calendrier de votre téléphone/ordinateur (abonnement), et vous n'aurez plus besoin de revenir sur cette page.</p>
         </div>
       </div>
     </aside>

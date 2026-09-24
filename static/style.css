@@ -99,6 +99,40 @@ body {
 
 .course-list { display: flex; flex-direction: column; gap: 10px; }
 
+.direction-block {
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  overflow: hidden;
+}
+.direction-block.hidden { display: none; }
+.direction-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  margin: 0;
+  padding: 13px 16px;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+.direction-title::-webkit-details-marker { display: none; }
+.direction-title::before {
+  content: "▸";
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.direction-block[open] > .direction-title::before { transform: rotate(90deg); }
+.direction-block[open] > .direction-title { border-bottom: 1px solid var(--line); }
+.direction-courses { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.direction-count { font-weight: 400; color: var(--muted); font-size: 12px; text-transform: none; letter-spacing: normal; }
+
 .course-card {
   border: 1px solid var(--line);
   border-radius: 10px;
