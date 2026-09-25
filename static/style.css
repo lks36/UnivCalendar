@@ -200,3 +200,108 @@ body {
   padding: 8px 10px;
   word-break: break-all;
 }
+
+/* ===== Onglets ===== */
+.tabs-row { padding-top: 0; padding-bottom: 12px; }
+.tabs { display: flex; gap: 6px; }
+.tab-btn {
+  border: 1px solid var(--line);
+  background: white;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.tab-btn.active { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+
+/* ===== Bouton pleine largeur (tout désélectionner) ===== */
+.btn-block { width: 100%; margin-top: 8px; }
+
+.optional-tag { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+.subscribe-block summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+.subscribe-block[open] summary { margin-bottom: 8px; }
+
+/* ===== Calendrier : état de chargement / vide ===== */
+.calendar-loading, .calendar-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.calendar-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0 0 12px;
+}
+#calendar-content > .calendar-section-title:not(:first-child) { margin-top: 28px; }
+
+/* ===== Agenda (liste par jour) ===== */
+.agenda-list { display: flex; flex-direction: column; gap: 14px; }
+.agenda-day {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  padding: 12px 14px;
+}
+.agenda-day-label {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+.agenda-event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--paper);
+  font-size: 13.5px;
+}
+.agenda-event:first-of-type { border-top: none; }
+.agenda-time { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; min-width: 100px; }
+.agenda-course { font-weight: 600; }
+.agenda-session { font-weight: 400; color: var(--muted); }
+.agenda-location { color: var(--muted); font-size: 12.5px; }
+
+/* ===== Vue mensuelle ===== */
+.month-grids { display: flex; flex-wrap: wrap; gap: 16px; }
+.month-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  padding: 12px 14px;
+  width: 260px;
+}
+.month-title { font-weight: 700; font-size: 13px; margin-bottom: 8px; text-transform: capitalize; }
+.month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.month-weekday { font-size: 10.5px; color: var(--muted); text-align: center; padding-bottom: 4px; }
+.month-day {
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: default;
+}
+.month-day.has-event {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+.month-day.has-event:hover { background: var(--accent); color: white; }
+.month-day:disabled { color: #c7c1b2; }
+
+.day-detail {
+  margin-top: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 13.5px;
+  color: var(--muted);
+}

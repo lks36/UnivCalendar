@@ -1,5 +1,6 @@
 import logging
 import threading
+import datetime
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
@@ -91,6 +92,31 @@ def api_sync():
 @app.route("/api/sync-status")
 def api_sync_status():
     return jsonify(_sync_status)
+
+
+@app.route("/api/calendar")
+def api_calendar():
+    """返回从今天起到未来约4个月的已选课程事件，供前端渲染可视化日历。
+    前端自己再把最近14天当"日程表"、剩下的当"月份总览"来分开展示。
+    """
+    today = datetime.date.today()
+    start = datetime.datetime.combine(today, datetime.time.min).isoformat()
+    end = datetime.datetime.combine(
+        today + datetime.timedelta(days=4 * 30), datetime.time.min
+    ).isoformat()
+
+    rows = get_selected_events(start=start, end=end)
+    events = [
+        {
+            "course_key": r["course_key"],
+            "session_type": r["session_type"],
+            "location": r["location"],
+            "start": r["dtstart"],
+            "end": r["dtend"],
+        }
+        for r in rows
+    ]
+    return jsonify({"events": events, "range_start": start, "range_end": end})
 
 
 @app.route("/mon_emploi_du_temps.ics")

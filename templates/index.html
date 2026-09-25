@@ -15,10 +15,18 @@
         <button id="sync-btn" class="btn btn-ghost">Resynchroniser</button>
       </div>
     </div>
+    <div class="topbar-inner tabs-row">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="select">Sélection des cours</button>
+        <button class="tab-btn" data-tab="calendar">Mon calendrier</button>
+      </div>
+    </div>
   </header>
 
   <main class="layout">
-    <section class="panel">
+
+    <!-- ===== Onglet 1 : sélection des cours ===== -->
+    <section class="panel tab-panel" data-tab-panel="select">
       <div class="panel-head">
         <input id="search" type="text" placeholder="Rechercher un cours, un code..." autocomplete="off">
         <span class="count" id="course-count">{{ total_courses }} cours</span>
@@ -53,18 +61,36 @@
       </div>
     </section>
 
+    <!-- ===== Onglet 2 : calendrier visuel ===== -->
+    <section class="panel tab-panel" data-tab-panel="calendar" hidden>
+      <div id="calendar-loading" class="calendar-loading">Chargement du calendrier...</div>
+
+      <div id="calendar-empty" class="calendar-empty" hidden>
+        Aucun cours sélectionné pour l'instant. Retournez sur "Sélection des cours" pour en cocher.
+      </div>
+
+      <div id="calendar-content" hidden>
+        <h2 class="calendar-section-title">Les 14 prochains jours</h2>
+        <div id="agenda-list" class="agenda-list"></div>
+
+        <h2 class="calendar-section-title">Vue mensuelle (4 prochains mois)</h2>
+        <div id="month-grids" class="month-grids"></div>
+      </div>
+    </section>
+
     <aside class="side">
       <div class="side-card">
         <h2>Ma sélection</h2>
-        <p class="side-hint">Cochez vos cours et groupes ci-contre, puis générez votre fichier d'abonnement.</p>
-        <button id="save-btn" class="btn btn-primary">Enregistrer et générer le .ics</button>
+        <p class="side-hint">Cochez vos cours et groupes, puis enregistrez pour voir votre calendrier.</p>
+        <button id="save-btn" class="btn btn-primary">Enregistrer</button>
+        <button id="clear-btn" class="btn btn-ghost btn-block">Tout désélectionner</button>
         <div id="save-result" class="save-result"></div>
 
-        <div class="subscribe-block">
-          <h3>Lien d'abonnement</h3>
+        <details class="subscribe-block">
+          <summary>Lien d'abonnement .ics <span class="optional-tag">(optionnel)</span></summary>
+          <p class="side-hint small">Pour ceux qui préfèrent utiliser leur propre app Calendrier (Apple/Google) plutôt que cette page.</p>
           <code id="ics-url">{{ request.host_url }}mon_emploi_du_temps.ics</code>
-          <p class="side-hint small">Ajoutez ce lien dans l'app Calendrier de votre téléphone/ordinateur (abonnement), et vous n'aurez plus besoin de revenir sur cette page.</p>
-        </div>
+        </details>
       </div>
     </aside>
   </main>

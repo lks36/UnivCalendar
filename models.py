@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sqlite3
 from contextlib import contextmanager
 
@@ -130,15 +132,26 @@ def save_selection(pairs: list[tuple[str, str]]):
         )
 
 
-def get_selected_events() -> list[sqlite3.Row]:
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT e.* FROM events e
+def get_selected_events(start: str | None = None, end: str | None = None) -> list[sqlite3.Row]:
+    """start/end: ISO8601 字符串，按 dtstart 过滤范围（都不传则返回全部，用于生成完整 .ics）"""
+    query = """SELECT e.* FROM events e
                JOIN selection s
                  ON e.course_key = s.course_key
-                AND TRIM(LOWER(e.session_type)) = s.session_key
-               ORDER BY e.dtstart"""
-        ).fetchall()
+                AND TRIM(LOWER(e.session_type)) = s.session_key"""
+    conditions = []
+    params: list = []
+    if start:
+        conditions.append("e.dtstart >= ?")
+        params.append(start)
+    if end:
+        conditions.append("e.dtstart <= ?")
+        params.append(end)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY e.dtstart"
+
+    with get_conn() as conn:
+        rows = conn.execute(query, params).fetchall()
 
     # 同一门课因跨系互选会在多个系的日历里被重复抓到；如果时间、课程、场次完全一致，
     # 大概率是同一节课的重复副本（哪怕标题大小写不同，比如 'Cours' / 'cours'），
