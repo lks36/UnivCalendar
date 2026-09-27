@@ -6,15 +6,9 @@ via une page web, et génère un fichier `.ics` personnel à s'abonner sur son c
 (Apple Calendar, Google Calendar, etc.). Multi-utilisateurs : chaque prénom a son
 propre espace (`/u/<prénom>/`), sans se marcher dessus.
 
-Trois façons de l'utiliser, du plus simple au plus complet :
+## Lien du site : https://sorbonne-cal.onrender.com
 
-| | Où ça tourne | Stockage | Accessible par des amis ? |
-|---|---|---|---|
-| **A. Local** | Votre ordinateur | SQLite local | Non (juste vous) |
-| **B. Cloud gratuit (Neon + Render)** | 24/7 sur Render | Postgres Neon (persistant) | Oui, lien fixe, toujours en ligne |
-| **C. Local + Cloudflare Tunnel** | Votre ordinateur, exposé | SQLite local | Oui, mais seulement si votre ordi reste allumé |
-
-## 1. Installation
+## 1. Installation en local
 
 ```bash
 cd sorbonne-cal
@@ -101,16 +95,6 @@ cloudflared tunnel --url http://localhost:5050   # dans un autre
 `cloudflared` donne un lien `https://xxxx.trycloudflare.com` à partager.
 Ce lien change à chaque redémarrage du tunnel (pour un lien fixe, il faut un
 compte Cloudflare + un nom de domaine, voir la doc Cloudflare Tunnel).
-
-## 5. Autre alternative : calendrier statique en lecture seule
-
-Pour une seule personne qui veut juste s'abonner sans interface de
-sélection en ligne, il y a aussi un mode "publication statique" via GitHub
-Pages (`ci_build.py`, `docs/`, `export_selection.py`,
-`.github/workflows/pages.yml`) — pas de stockage multi-utilisateurs, juste
-un `.ics` régénéré et publié automatiquement. Utile si l'option B semble
-trop lourde à mettre en place. Voir les commentaires en tête de
-`ci_build.py` pour la marche à suivre.
 
 ## Réglages utiles (`config.py`)
 
