@@ -18,12 +18,8 @@ DB_PATH = os.path.join(BASE_DIR, "data.db")
 _raw_database_url = os.environ.get("DATABASE_URL") or f"sqlite:///{DB_PATH}"
 # Neon/Render/Heroku 这类平台给出的连接串常常是旧式的 postgres://，
 # SQLAlchemy 需要 postgresql:// 前缀，这里做个兼容转换。
-# 统一改成 postgresql+psycopg://，显式指定用 psycopg 3 驱动（和 requirements.txt 一致），
-# 不依赖 SQLAlchemy 的默认驱动选择（不同版本默认值不一样，容易报 No module named 'psycopg'）。
-for _prefix in ("postgres://", "postgresql://"):
-    if _raw_database_url.startswith(_prefix):
-        _raw_database_url = "postgresql+psycopg://" + _raw_database_url[len(_prefix):]
-        break
+if _raw_database_url.startswith("postgres://"):
+    _raw_database_url = _raw_database_url.replace("postgres://", "postgresql://", 1)
 DATABASE_URL = _raw_database_url
 
 # 每个使用者(owner)各自的 .ics 文件放这个目录下，文件名是 <owner>.ics
