@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon emploi du temps — Sorbonne</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <h1>Mon emploi du temps</h1>
+      <div class="sync-block">
+        <span id="generated-at" class="sync-status"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <div id="calendar-loading" class="calendar-loading">Chargement du calendrier...</div>
+      <div id="calendar-empty" class="calendar-empty" hidden>
+        Aucun cours dans les données actuelles.
+      </div>
+      <div id="calendar-content" hidden>
+        <h2 class="calendar-section-title">Les 14 prochains jours</h2>
+        <div id="agenda-list" class="agenda-list"></div>
+
+        <h2 class="calendar-section-title">Vue mensuelle (4 prochains mois)</h2>
+        <div id="month-grids" class="month-grids"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="side-card">
+        <h2>Abonnement</h2>
+        <p class="side-hint">Ajoutez ce lien dans l'app Calendrier de votre téléphone/ordinateur pour une synchro automatique.</p>
+        <code id="ics-url">mon_emploi_du_temps.ics</code>
+        <p class="side-hint small">Ce calendrier est régénéré automatiquement plusieurs fois par jour par GitHub Actions.</p>
+      </div>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

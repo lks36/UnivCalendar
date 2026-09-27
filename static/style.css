@@ -39,6 +39,7 @@ body {
   margin: 0;
   letter-spacing: -0.01em;
 }
+.owner-tag { font-weight: 400; color: var(--muted); font-size: 15px; }
 
 .sync-block { display: flex; align-items: center; gap: 12px; }
 .sync-status { font-size: 13px; color: var(--muted); }
@@ -305,3 +306,31 @@ body {
   font-size: 13.5px;
   color: var(--muted);
 }
+
+/* ===== Page d'entrée (choix du nom) ===== */
+.landing-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.landing-card {
+  max-width: 400px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  padding: 28px;
+  text-align: center;
+}
+.landing-card h1 { font-size: 20px; margin: 0 0 10px; }
+.landing-form { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.landing-form input {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+.landing-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }

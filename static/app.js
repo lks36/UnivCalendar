@@ -1,3 +1,6 @@
+const OWNER = document.body.dataset.owner;
+const API_BASE = `/u/${OWNER}`;
+
 const searchInput = document.getElementById("search");
 const courseList = document.getElementById("course-list");
 const directionBlocks = [...document.querySelectorAll(".direction-block")];
@@ -53,7 +56,7 @@ saveBtn.addEventListener("click", async () => {
   saveResult.className = "save-result";
 
   try {
-    const res = await fetch("/api/save-selection", {
+    const res = await fetch(`${API_BASE}/api/save-selection`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ selection }),
@@ -78,7 +81,7 @@ syncBtn.addEventListener("click", async () => {
   syncBtn.disabled = true;
   syncStatus.textContent = "Synchronisation avec le serveur de l'université en cours, cela peut prendre un moment...";
   try {
-    const res = await fetch("/api/sync", { method: "POST" });
+    const res = await fetch(`/api/sync`, { method: "POST" });
     const data = await res.json();
     syncStatus.textContent = data.message;
     if (data.ok) {
@@ -94,7 +97,7 @@ syncBtn.addEventListener("click", async () => {
 
 function pollSyncStatus() {
   const timer = setInterval(async () => {
-    const res = await fetch("/api/sync-status");
+    const res = await fetch(`/api/sync-status`);
     const data = await res.json();
     if (!data.running) {
       clearInterval(timer);
@@ -139,7 +142,7 @@ clearBtn.addEventListener("click", async () => {
   saveResult.textContent = "Désélection en cours...";
   saveResult.className = "save-result";
   try {
-    const res = await fetch("/api/save-selection", {
+    const res = await fetch(`${API_BASE}/api/save-selection`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ selection: [] }),
@@ -188,7 +191,7 @@ async function loadCalendar() {
   contentEl.hidden = true;
 
   try {
-    const res = await fetch("/api/calendar");
+    const res = await fetch(`${API_BASE}/api/calendar`);
     const data = await res.json();
     const events = data.events || [];
 

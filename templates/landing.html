@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon emploi du temps — Sorbonne</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="landing-wrap">
+    <div class="landing-card">
+      <h1>Mon emploi du temps</h1>
+      <p class="side-hint">
+        Entrez votre prénom pour accéder à votre propre sélection de cours
+        (chacun a son espace, personne ne voit ce que les autres cochent).
+      </p>
+      <form method="post" action="{{ url_for('go_to_owner') }}" class="landing-form">
+        <input type="text" name="name" placeholder="ex : lucas" autocomplete="off" required autofocus>
+        <button type="submit" class="btn btn-primary">Continuer</button>
+      </form>
+      {% if error %}
+      <p class="save-result err">{{ error }}</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

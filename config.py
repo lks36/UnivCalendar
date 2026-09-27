@@ -1,16 +1,19 @@
 import os
 
 # ---- CalDAV 服务器配置 ----
-CALDAV_BASE_URL = os.environ.get(
-    "CALDAV_BASE_URL", "https://cal.ufr-info-p6.jussieu.fr/caldav.php/"
+CALDAV_BASE_URL = (
+    os.environ.get("CALDAV_BASE_URL") or "https://cal.ufr-info-p6.jussieu.fr/caldav.php/"
 )
-CALDAV_USERNAME = os.environ.get("CALDAV_USERNAME", "student.master")
-CALDAV_PASSWORD = os.environ.get("CALDAV_PASSWORD", "guest")
+# 用 `or` 兜底而不是 os.environ.get(key, default)：GitHub Actions 里如果没配置对应
+# Secret，环境变量会被设成空字符串而不是完全不存在，.get 的 default 值就不会生效。
+CALDAV_USERNAME = os.environ.get("CALDAV_USERNAME") or "student.master"
+CALDAV_PASSWORD = os.environ.get("CALDAV_PASSWORD") or "guest"
 
 # ---- 本地存储 ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "data.db")
-ICS_OUTPUT_PATH = os.path.join(BASE_DIR, "static", "mon_emploi_du_temps.ics")
+# 每个使用者(owner)各自的 .ics 文件放这个目录下，文件名是 <owner>.ics
+ICS_DIR = os.path.join(BASE_DIR, "static", "ics")
 
 # ---- 同步范围 ----
 # 只抓取这几个未来月份内的事件，避免拉取过多历史数据

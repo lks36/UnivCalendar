@@ -1,13 +1,13 @@
 """独立可运行的同步脚本：
     python3 sync.py
-拉取官方 CalDAV 全量数据 -> 写入本地数据库 -> 根据已保存的选课结果重新生成 .ics。
+拉取官方 CalDAV 全量数据 -> 写入本地数据库 -> 给每个已经选过课的人重新生成各自的 .ics。
 适合放进 cron / launchd 定时任务，每天跑一到两次。
 """
 
 import logging
 import sys
 
-from models import init_db, replace_events, get_selected_events
+from models import init_db, replace_events, get_selected_events, get_all_owners
 from caldav_client import sync_all
 from ics_generator import write_ics_file
 
@@ -27,9 +27,18 @@ def main():
     replace_events(events)
     logger.info("已写入 %d 条事件到本地数据库", len(events))
 
-    selected = get_selected_events()
-    path = write_ics_file(selected)
-    logger.info("已根据当前选课结果生成 %s（共 %d 门场次）", path, len(selected))
+    owners = get_all_owners()
+    for owner in owners:
+        selected = get_selected_events(owner)
+        path = write_ics_file(owner, selected)
+        logger.info("[%s] 已生成 %s（共 %d 个场次）", owner, path, len(selected))
+
+    if not owners:
+        logger.info("目前还没有任何人选过课，暂不生成 .ics。")
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":

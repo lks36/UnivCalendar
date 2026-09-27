@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from contextlib import contextmanager
 
@@ -21,12 +22,28 @@ CREATE TABLE IF NOT EXISTS events (
     last_synced TEXT NOT NULL
 );
 
+-- owner：每个使用者的空间标识（URL 里 /u/<owner>/ 的那个slug），课程数据(events)全站共享，
+-- 只有 selection（谁选了什么课）按 owner 隔离，这样多个朋友互不干扰。
 CREATE TABLE IF NOT EXISTS selection (
+    owner TEXT NOT NULL,
     course_key TEXT NOT NULL,
     session_key TEXT NOT NULL,        -- 归一化后的 session_type（trim + lower），用于去重匹配
-    PRIMARY KEY (course_key, session_key)
+    PRIMARY KEY (owner, course_key, session_key)
 );
 """
+
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
+
+
+def normalize_owner(raw: str) -> str:
+    """把用户输入的名字变成安全的 slug（只留小写字母数字和短横线，最长32位）。
+    用作 URL 路径段和 ics 文件名，绝不能包含 / \\ .. 等危险字符。
+    """
+    slug = re.sub(r"[^a-z0-9-]+", "-", (raw or "").strip().lower()).strip("-")
+    slug = slug[:32]
+    if not slug or not SLUG_RE.match(slug):
+        raise ValueError("Nom invalide : lettres, chiffres et tirets uniquement.")
+    return slug
 
 
 @contextmanager
@@ -43,11 +60,26 @@ def get_conn():
 def init_db():
     with get_conn() as conn:
         conn.executescript(SCHEMA)
-        # 兼容旧数据库：如果是从没有 master_group 字段的旧版本升级上来的，
-        # 这里自动补上这一列，避免用户手动删库重来。
+        # 兼容旧数据库：如果是从没有 master_group / owner 字段的旧版本升级上来的，
+        # 这里自动补上，避免用户手动删库重来。
         cols = [row["name"] for row in conn.execute("PRAGMA table_info(events)")]
         if "master_group" not in cols:
             conn.execute("ALTER TABLE events ADD COLUMN master_group TEXT NOT NULL DEFAULT ''")
+
+        sel_cols = [row["name"] for row in conn.execute("PRAGMA table_info(selection)")]
+        if "owner" not in sel_cols:
+            # 旧版本的 selection 表没有 owner 概念，没法安全地加主键列，
+            # 直接重建成新结构，旧的（无主人的）选课记录只能作废。
+            conn.execute("ALTER TABLE selection RENAME TO selection_old")
+            conn.execute(
+                """CREATE TABLE selection (
+                    owner TEXT NOT NULL,
+                    course_key TEXT NOT NULL,
+                    session_key TEXT NOT NULL,
+                    PRIMARY KEY (owner, course_key, session_key)
+                )"""
+            )
+            conn.execute("DROP TABLE selection_old")
 
 
 def replace_events(events: list[dict]):
@@ -66,8 +98,8 @@ def replace_events(events: list[dict]):
 
 
 def get_course_groups():
-    """按 Master 分类 -> 课程 -> 场次 的三层结构返回全部课程，供选课页面渲染。
-    同一门课如果因跨系互选出现在多个日历里，这里按 course_key 合并去重；
+    """按 Master 分类 -> 课程 -> 场次 的三层结构返回全部课程（全站共享，与 owner 无关），
+    供选课页面渲染。同一门课如果因跨系互选出现在多个日历里，这里按 course_key 合并去重；
     场次标签按 trim+小写 去重（避免 'Cours' / 'cours' 被当成两个不同的场次）。
     """
     with get_conn() as conn:
@@ -78,9 +110,7 @@ def get_course_groups():
                ORDER BY course_key, session_type"""
         ).fetchall()
 
-    # course_key -> {session_key: 展示用label}（跨系合并、大小写去重后的全部场次）
     sessions_by_course: dict[str, dict[str, str]] = {}
-    # course_key -> {master_group: 这个系贡献了多少个不同场次}，用来判断这门课"真正属于"哪个系
     group_session_counts: dict[str, dict[str, int]] = {}
 
     for r in rows:
@@ -91,14 +121,10 @@ def get_course_groups():
         counts = group_session_counts.setdefault(key, {})
         counts[r["master_group"]] = counts.get(r["master_group"], 0) + 1
 
-    # 每门课归属到"贡献场次数最多"的系（真正开课的系通常有 Cours/TD/TME 好几个场次，
-    # 只是被跨系引用的系往往只共享一两个重叠场次，比如一节公共英语课）。
-    # 场次数打平手时按名字排序取第一个，保证结果稳定可预期。
     home_group: dict[str, str] = {}
     for key, counts in group_session_counts.items():
         home_group[key] = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
 
-    # 按 master_group 分组，供模板渲染折叠区块
     grouped: dict[str, list] = {}
     for key, sessions in sessions_by_course.items():
         grouped.setdefault(home_group[key], []).append(
@@ -115,39 +141,46 @@ def get_course_groups():
     return result
 
 
-def get_selection() -> set[tuple[str, str]]:
-    """返回 (course_key, session_key) 归一化后的已选集合"""
+def get_all_owners() -> list[str]:
+    """返回目前有选课记录的所有 owner，供批量重新生成每个人的 .ics"""
     with get_conn() as conn:
-        rows = conn.execute("SELECT course_key, session_key FROM selection").fetchall()
+        rows = conn.execute("SELECT DISTINCT owner FROM selection ORDER BY owner").fetchall()
+    return [r["owner"] for r in rows]
+def get_selection(owner: str) -> set[tuple[str, str]]:
+    """返回某个 owner 的 (course_key, session_key) 归一化后已选集合"""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT course_key, session_key FROM selection WHERE owner = ?", (owner,)
+        ).fetchall()
     return {(r["course_key"], r["session_key"]) for r in rows}
 
 
-def save_selection(pairs: list[tuple[str, str]]):
-    """pairs: [(course_key, session_type_raw), ...]，这里统一归一化后存储"""
-    normalized = [(ck, st.strip().lower()) for ck, st in pairs]
+def save_selection(owner: str, pairs: list[tuple[str, str]]):
+    """pairs: [(course_key, session_type_raw), ...]，这里统一归一化后存储，只影响这个 owner 自己的选课"""
+    normalized = [(owner, ck, st.strip().lower()) for ck, st in pairs]
     with get_conn() as conn:
-        conn.execute("DELETE FROM selection")
+        conn.execute("DELETE FROM selection WHERE owner = ?", (owner,))
         conn.executemany(
-            "INSERT INTO selection (course_key, session_key) VALUES (?, ?)", normalized
+            "INSERT INTO selection (owner, course_key, session_key) VALUES (?, ?, ?)", normalized
         )
 
 
-def get_selected_events(start: str | None = None, end: str | None = None) -> list[sqlite3.Row]:
+def get_selected_events(
+    owner: str, start: str | None = None, end: str | None = None
+) -> list[sqlite3.Row]:
     """start/end: ISO8601 字符串，按 dtstart 过滤范围（都不传则返回全部，用于生成完整 .ics）"""
     query = """SELECT e.* FROM events e
                JOIN selection s
                  ON e.course_key = s.course_key
-                AND TRIM(LOWER(e.session_type)) = s.session_key"""
-    conditions = []
-    params: list = []
+                AND TRIM(LOWER(e.session_type)) = s.session_key
+               WHERE s.owner = ?"""
+    params: list = [owner]
     if start:
-        conditions.append("e.dtstart >= ?")
+        query += " AND e.dtstart >= ?"
         params.append(start)
     if end:
-        conditions.append("e.dtstart <= ?")
+        query += " AND e.dtstart <= ?"
         params.append(end)
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY e.dtstart"
 
     with get_conn() as conn:

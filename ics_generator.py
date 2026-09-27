@@ -3,9 +3,11 @@
 避免自己重新计算时区/夏令时。
 """
 
+import os
+
 from icalendar import Calendar, Event
 
-from config import ICS_OUTPUT_PATH
+from config import ICS_DIR
 
 
 def build_ics(event_rows) -> bytes:
@@ -24,7 +26,13 @@ def build_ics(event_rows) -> bytes:
     return cal.to_ical()
 
 
-def write_ics_file(event_rows, path: str = ICS_OUTPUT_PATH) -> str:
+def ics_path_for(owner: str) -> str:
+    return os.path.join(ICS_DIR, f"{owner}.ics")
+
+
+def write_ics_file(owner: str, event_rows) -> str:
+    os.makedirs(ICS_DIR, exist_ok=True)
+    path = ics_path_for(owner)
     data = build_ics(event_rows)
     with open(path, "wb") as f:
         f.write(data)
