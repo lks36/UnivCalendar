@@ -16,10 +16,27 @@ DB_PATH = os.path.join(BASE_DIR, "data.db")
 # 部署到云端时设置 DATABASE_URL 指向 Neon/Supabase 这类免费云端 Postgres，
 # 数据就不会因为服务器重启/休眠而丢失。
 _raw_database_url = os.environ.get("DATABASE_URL") or f"sqlite:///{DB_PATH}"
-# Neon/Render/Heroku 这类平台给出的连接串常常是旧式的 postgres://，
-# SQLAlchemy 需要 postgresql:// 前缀，这里做个兼容转换。
-if _raw_database_url.startswith("postgres://"):
-    _raw_database_url = _raw_database_url.replace("postgres://", "postgresql://", 1)
+
+
+# 根据环境里实际装了哪个 Postgres 驱动，自动选择（psycopg 3 优先，其次 psycopg2）
+def _pick_pg_driver() -> str:
+    try:
+        import psycopg  # noqa: F401
+        return "psycopg"
+    except ImportError:
+        pass
+    try:
+        import psycopg2  # noqa: F401
+        return "psycopg2"
+    except ImportError:
+        pass
+    raise RuntimeError("DATABASE_URL 指向 Postgres，但没有安装驱动：requirements.txt 里加上 psycopg[binary]")
+
+
+for _prefix in ("postgres://", "postgresql://"):
+    if _raw_database_url.startswith(_prefix):
+        _raw_database_url = f"postgresql+{_pick_pg_driver()}://" + _raw_database_url[len(_prefix):]
+        break
 DATABASE_URL = _raw_database_url
 
 # 每个使用者(owner)各自的 .ics 文件放这个目录下，文件名是 <owner>.ics
