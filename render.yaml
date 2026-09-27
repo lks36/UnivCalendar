@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: sorbonne-cal
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
+    envVars:
+      # 在 Render 控制台里手动填这些值（不写进代码仓库）：
+      # DATABASE_URL 从 Neon/Supabase 的连接串复制过来
+      - key: DATABASE_URL
+        sync: false
+      # 学校 CalDAV 的账号密码，默认公开访客凭证 student.master/guest 就够用，
+      # 不填也没关系（config.py 里有默认值）
+      - key: CALDAV_USERNAME
+        sync: false
+      - key: CALDAV_PASSWORD
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true

@@ -1,38 +1,43 @@
 from __future__ import annotations
 
 import re
-import sqlite3
-from contextlib import contextmanager
 
-from config import DB_PATH
+from sqlalchemy import create_engine, text
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS events (
-    uid TEXT PRIMARY KEY,
-    calendar_path TEXT NOT NULL,      -- 例如 RES/M1_RES
-    master_group TEXT NOT NULL,       -- 顶层分类，例如 RES / SESI / SAR（对应官网左侧 Master 分类）
-    course_key TEXT NOT NULL,         -- 课程分组键，例如 UM4IN002-RTEL
-    session_type TEXT NOT NULL,       -- 具体场次/分组标签，例如 TD2 / CS / TME1
-    summary TEXT NOT NULL,            -- 原始标题
-    location TEXT,
-    description TEXT,
-    dtstart TEXT NOT NULL,            -- ISO8601
-    dtend TEXT NOT NULL,              -- ISO8601
-    ical_raw TEXT NOT NULL,           -- 原始 VEVENT 文本，直接复用避免时区手工处理
-    last_synced TEXT NOT NULL
-);
-
--- owner：每个使用者的空间标识（URL 里 /u/<owner>/ 的那个slug），课程数据(events)全站共享，
--- 只有 selection（谁选了什么课）按 owner 隔离，这样多个朋友互不干扰。
-CREATE TABLE IF NOT EXISTS selection (
-    owner TEXT NOT NULL,
-    course_key TEXT NOT NULL,
-    session_key TEXT NOT NULL,        -- 归一化后的 session_type（trim + lower），用于去重匹配
-    PRIMARY KEY (owner, course_key, session_key)
-);
-"""
+from config import DATABASE_URL
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
+
+# pool_pre_ping: 云端 Postgres 连接可能因为空闲被服务器断开，这个选项让 SQLAlchemy
+# 每次用连接前先探测一下，断了就自动换一条新连接，避免"连接已失效"的报错。
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+
+SCHEMA_STATEMENTS = [
+    """
+    CREATE TABLE IF NOT EXISTS events (
+        uid TEXT PRIMARY KEY,
+        calendar_path TEXT NOT NULL,
+        master_group TEXT NOT NULL,
+        course_key TEXT NOT NULL,
+        session_type TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        location TEXT,
+        description TEXT,
+        dtstart TEXT NOT NULL,
+        dtend TEXT NOT NULL,
+        ical_raw TEXT NOT NULL,
+        last_synced TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS selection (
+        owner TEXT NOT NULL,
+        course_key TEXT NOT NULL,
+        session_key TEXT NOT NULL,
+        PRIMARY KEY (owner, course_key, session_key)
+    )
+    """,
+]
 
 
 def normalize_owner(raw: str) -> str:
@@ -46,69 +51,54 @@ def normalize_owner(raw: str) -> str:
     return slug
 
 
-@contextmanager
-def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
-
-
 def init_db():
-    with get_conn() as conn:
-        conn.executescript(SCHEMA)
-        # 兼容旧数据库：如果是从没有 master_group / owner 字段的旧版本升级上来的，
-        # 这里自动补上，避免用户手动删库重来。
-        cols = [row["name"] for row in conn.execute("PRAGMA table_info(events)")]
-        if "master_group" not in cols:
-            conn.execute("ALTER TABLE events ADD COLUMN master_group TEXT NOT NULL DEFAULT ''")
+    with engine.begin() as conn:
+        for stmt in SCHEMA_STATEMENTS:
+            conn.execute(text(stmt))
 
-        sel_cols = [row["name"] for row in conn.execute("PRAGMA table_info(selection)")]
-        if "owner" not in sel_cols:
-            # 旧版本的 selection 表没有 owner 概念，没法安全地加主键列，
-            # 直接重建成新结构，旧的（无主人的）选课记录只能作废。
-            conn.execute("ALTER TABLE selection RENAME TO selection_old")
-            conn.execute(
-                """CREATE TABLE selection (
-                    owner TEXT NOT NULL,
-                    course_key TEXT NOT NULL,
-                    session_key TEXT NOT NULL,
-                    PRIMARY KEY (owner, course_key, session_key)
-                )"""
-            )
-            conn.execute("DROP TABLE selection_old")
+        # 兼容从旧版 SQLite 库升级上来的情况（旧表没有 master_group / owner 字段）。
+        # 只在 SQLite 下做这个检查——全新的云端 Postgres 库从一开始就是新结构，不需要迁移。
+        if engine.dialect.name == "sqlite":
+            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(events)"))]
+            if "master_group" not in cols:
+                conn.execute(text("ALTER TABLE events ADD COLUMN master_group TEXT NOT NULL DEFAULT ''"))
+
+            sel_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(selection)"))]
+            if "owner" not in sel_cols:
+                conn.execute(text("ALTER TABLE selection RENAME TO selection_old"))
+                conn.execute(text(SCHEMA_STATEMENTS[1]))
+                conn.execute(text("DROP TABLE selection_old"))
 
 
 def replace_events(events: list[dict]):
     """全量覆盖式写入本次同步抓到的事件（course_key/session_type/master_group 已解析好）"""
-    with get_conn() as conn:
-        conn.execute("DELETE FROM events")
-        conn.executemany(
-            """INSERT INTO events
-               (uid, calendar_path, master_group, course_key, session_type, summary,
-                location, description, dtstart, dtend, ical_raw, last_synced)
-               VALUES (:uid, :calendar_path, :master_group, :course_key, :session_type,
-                       :summary, :location, :description, :dtstart, :dtend, :ical_raw,
-                       :last_synced)""",
-            events,
-        )
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM events"))
+        if events:
+            conn.execute(
+                text(
+                    """INSERT INTO events
+                       (uid, calendar_path, master_group, course_key, session_type, summary,
+                        location, description, dtstart, dtend, ical_raw, last_synced)
+                       VALUES (:uid, :calendar_path, :master_group, :course_key, :session_type,
+                               :summary, :location, :description, :dtstart, :dtend, :ical_raw,
+                               :last_synced)"""
+                ),
+                events,
+            )
 
 
 def get_course_groups():
-    """按 Master 分类 -> 课程 -> 场次 的三层结构返回全部课程（全站共享，与 owner 无关），
-    供选课页面渲染。同一门课如果因跨系互选出现在多个日历里，这里按 course_key 合并去重；
-    场次标签按 trim+小写 去重（避免 'Cours' / 'cours' 被当成两个不同的场次）。
-    """
-    with get_conn() as conn:
+    """按 Master 分类 -> 课程 -> 场次 的三层结构返回全部课程（全站共享，与 owner 无关）"""
+    with engine.begin() as conn:
         rows = conn.execute(
-            """SELECT DISTINCT master_group, course_key, session_type,
-                      TRIM(LOWER(session_type)) AS session_key
-               FROM events
-               ORDER BY course_key, session_type"""
-        ).fetchall()
+            text(
+                """SELECT DISTINCT master_group, course_key, session_type,
+                          TRIM(LOWER(session_type)) AS session_key
+                   FROM events
+                   ORDER BY course_key, session_type"""
+            )
+        ).mappings().all()
 
     sessions_by_course: dict[str, dict[str, str]] = {}
     group_session_counts: dict[str, dict[str, int]] = {}
@@ -143,48 +133,59 @@ def get_course_groups():
 
 def get_all_owners() -> list[str]:
     """返回目前有选课记录的所有 owner，供批量重新生成每个人的 .ics"""
-    with get_conn() as conn:
-        rows = conn.execute("SELECT DISTINCT owner FROM selection ORDER BY owner").fetchall()
-    return [r["owner"] for r in rows]
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT DISTINCT owner FROM selection ORDER BY owner")).all()
+    return [r[0] for r in rows]
+
+
 def get_selection(owner: str) -> set[tuple[str, str]]:
     """返回某个 owner 的 (course_key, session_key) 归一化后已选集合"""
-    with get_conn() as conn:
+    with engine.begin() as conn:
         rows = conn.execute(
-            "SELECT course_key, session_key FROM selection WHERE owner = ?", (owner,)
-        ).fetchall()
-    return {(r["course_key"], r["session_key"]) for r in rows}
+            text("SELECT course_key, session_key FROM selection WHERE owner = :owner"),
+            {"owner": owner},
+        ).all()
+    return {(r[0], r[1]) for r in rows}
 
 
 def save_selection(owner: str, pairs: list[tuple[str, str]]):
-    """pairs: [(course_key, session_type_raw), ...]，这里统一归一化后存储，只影响这个 owner 自己的选课"""
-    normalized = [(owner, ck, st.strip().lower()) for ck, st in pairs]
-    with get_conn() as conn:
-        conn.execute("DELETE FROM selection WHERE owner = ?", (owner,))
-        conn.executemany(
-            "INSERT INTO selection (owner, course_key, session_key) VALUES (?, ?, ?)", normalized
-        )
+    """pairs: [(course_key, session_type_raw), ...]，只影响这个 owner 自己的选课"""
+    normalized = [
+        {"owner": owner, "course_key": ck, "session_key": st.strip().lower()} for ck, st in pairs
+    ]
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM selection WHERE owner = :owner"), {"owner": owner})
+        if normalized:
+            conn.execute(
+                text(
+                    "INSERT INTO selection (owner, course_key, session_key) "
+                    "VALUES (:owner, :course_key, :session_key)"
+                ),
+                normalized,
+            )
 
 
-def get_selected_events(
-    owner: str, start: str | None = None, end: str | None = None
-) -> list[sqlite3.Row]:
-    """start/end: ISO8601 字符串，按 dtstart 过滤范围（都不传则返回全部，用于生成完整 .ics）"""
+def get_selected_events(owner: str, start: str | None = None, end: str | None = None) -> list[dict]:
+    """start/end: ISO8601 字符串，按 dtstart 过滤范围（都不传则返回全部，用于生成完整 .ics）
+    返回值是普通 dict 列表（不是数据库专属的 Row 对象），方便其他模块用 row["字段名"] 取值，
+    不用关心底层是 SQLite 还是 Postgres。
+    """
     query = """SELECT e.* FROM events e
                JOIN selection s
                  ON e.course_key = s.course_key
                 AND TRIM(LOWER(e.session_type)) = s.session_key
-               WHERE s.owner = ?"""
-    params: list = [owner]
+               WHERE s.owner = :owner"""
+    params: dict = {"owner": owner}
     if start:
-        query += " AND e.dtstart >= ?"
-        params.append(start)
+        query += " AND e.dtstart >= :start"
+        params["start"] = start
     if end:
-        query += " AND e.dtstart <= ?"
-        params.append(end)
+        query += " AND e.dtstart <= :end"
+        params["end"] = end
     query += " ORDER BY e.dtstart"
 
-    with get_conn() as conn:
-        rows = conn.execute(query, params).fetchall()
+    with engine.begin() as conn:
+        rows = [dict(r) for r in conn.execute(text(query), params).mappings().all()]
 
     # 同一门课因跨系互选会在多个系的日历里被重复抓到；如果时间、课程、场次完全一致，
     # 大概率是同一节课的重复副本（哪怕标题大小写不同，比如 'Cours' / 'cours'），

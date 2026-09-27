@@ -1,15 +1,18 @@
 # Sorbonne Cal — Synchro emploi du temps
 
 Petit outil qui va chercher automatiquement les cours sur le CalDAV de l'UFR Info
-(`cal.ufr-info-p6.jussieu.fr`), et permet de choisir soi-même ses cours/groupes
-via une page web, pour générer un fichier `.ics` personnel à s'abonner sur son
-calendrier (Apple Calendar, Google Calendar, etc.).
+(`cal.ufr-info-p6.jussieu.fr`), permet à chacun de choisir ses propres cours/groupes
+via une page web, et génère un fichier `.ics` personnel à s'abonner sur son calendrier
+(Apple Calendar, Google Calendar, etc.). Multi-utilisateurs : chaque prénom a son
+propre espace (`/u/<prénom>/`), sans se marcher dessus.
 
-Deux façons de l'utiliser :
-- **En local** (section 1-3) : tout tourne sur son ordinateur.
-- **Dans le cloud** (section 4) : GitHub Actions rafraîchit le calendrier tout
-  seul plusieurs fois par jour et le publie sur une adresse web fixe, pour un
-  abonnement natif depuis son téléphone sans avoir besoin de l'ordinateur allumé.
+Trois façons de l'utiliser, du plus simple au plus complet :
+
+| | Où ça tourne | Stockage | Accessible par des amis ? |
+|---|---|---|---|
+| **A. Local** | Votre ordinateur | SQLite local | Non (juste vous) |
+| **B. Cloud gratuit (Neon + Render)** | 24/7 sur Render | Postgres Neon (persistant) | Oui, lien fixe, toujours en ligne |
+| **C. Local + Cloudflare Tunnel** | Votre ordinateur, exposé | SQLite local | Oui, mais seulement si votre ordi reste allumé |
 
 ## 1. Installation
 
@@ -20,7 +23,7 @@ source venv/bin/activate      # Windows : venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## 2. Choisir ses cours (en local)
+## 2. Utilisation en local (option A)
 
 ```bash
 python3 sync.py     # première récupération des cours depuis le CalDAV
@@ -28,12 +31,9 @@ python3 app.py       # lance la page de sélection
 ```
 
 Ouvrir **http://localhost:5050** : la page demande un prénom, puis redirige
-vers `/u/<prénom>/` — c'est votre espace personnel. Cocher ses cours et
-groupes, cliquer sur "Enregistrer". Chacun garde sa propre sélection (et son
-propre lien `.ics`), même en partageant le même service (voir section 5).
+vers `/u/<prénom>/`. Cocher ses cours et groupes, cliquer sur "Enregistrer".
 
-## 3. Rafraîchir automatiquement en local (optionnel)
-
+Pour rafraîchir automatiquement en local (optionnel) :
 ```bash
 crontab -e
 ```
@@ -41,80 +41,76 @@ crontab -e
 0 7,12 * * * cd /chemin/vers/sorbonne-cal && venv/bin/python3 sync.py
 ```
 
-## 4. Version cloud : GitHub Actions + GitHub Pages
+## 3. Version en ligne pour tout le monde (option B — recommandée)
 
-Une fois ses cours choisis en local (section 2), on exporte la sélection puis
-on la publie via GitHub :
+Un vrai site web, toujours accessible, avec les données stockées dans une
+vraie base (pas sur votre ordinateur). Deux services gratuits à combiner :
 
-```bash
-python3 export_selection.py <votre-prénom>   # écrit selection.json avec vos cours
-git init                         # si ce n'est pas déjà un dépôt git
-git add .
-git commit -m "Initial commit"
-git remote add origin git@github.com:<utilisateur>/<repo>.git
-git push -u origin main
-```
+### 3.1 Créer la base de données (Neon, gratuit)
 
-Puis dans les réglages du dépôt GitHub :
-1. **Settings > Pages** → Source : "GitHub Actions"
-2. (optionnel) **Settings > Secrets and variables > Actions** → ajouter
-   `CALDAV_USERNAME` / `CALDAV_PASSWORD` si les identifiants par défaut de
-   l'école changent un jour. Pas obligatoire au début, les valeurs par défaut
-   (`student.master` / `guest`) sont déjà utilisées.
+1. Créer un compte sur [neon.tech](https://neon.tech) (gratuit, pas de carte
+   bancaire nécessaire pour le tier gratuit)
+2. Créer un nouveau projet → copier la **connection string** (commence par
+   `postgres://...`)
 
-Le workflow (`.github/workflows/sync.yml`) tourne automatiquement plusieurs
-fois par jour (et à chaque `git push`), régénère le calendrier et le publie
-sur une adresse du type :
+### 3.2 Déployer le site (Render, gratuit)
 
-```
-https://<utilisateur>.github.io/<repo>/
-```
+1. Pousser ce projet sur GitHub (`git init && git add . && git commit -m init
+   && git push`)
+2. Sur [render.com](https://render.com) → New → Blueprint → sélectionner le
+   dépôt GitHub (Render lit automatiquement `render.yaml` inclus dans le
+   projet)
+3. Render demande les variables d'environnement : coller la connection
+   string de Neon dans `DATABASE_URL` (laisser `CALDAV_USERNAME`/
+   `CALDAV_PASSWORD` vides, les valeurs par défaut suffisent)
+4. Déployer. Render donne une adresse du type
+   `https://sorbonne-cal-xxxx.onrender.com`
 
-Cette page affiche le calendrier (14 prochains jours + vue mensuelle sur 4
-mois) et propose le lien `.ics` correspondant, à ajouter dans l'app Calendrier
-du téléphone comme abonnement — il se synchronisera tout seul, sans que
-l'ordinateur ait besoin d'être allumé.
+C'est ce lien à partager à ses amis. Chacun va sur `/`, choisit son prénom,
+coche ses cours — tout est sauvegardé dans Neon, pour toujours, peu importe
+que Render redémarre ou "s'endorme".
 
-Pour changer ses cours plus tard : relancer `app.py` en local, refaire
-`export_selection.py`, puis `git push` — le workflow se redéclenche
-automatiquement dès que `selection.json` change.
+### 3.3 Garder le calendrier à jour (GitHub Actions)
 
-**Attention** : un dépôt GitHub public + Pages public signifie que
-n'importe qui avec le lien peut voir l'emploi du temps (codes de cours,
-horaires, salles — rien de très sensible, mais bon à savoir). Pour un dépôt
-privé avec Pages, il faut un compte GitHub Pro/Team/Enterprise.
+Le service Render gratuit n'a pas de tâche planifiée intégrée, et s'endort
+après 15 minutes d'inactivité (le réveil prend 20-30 secondes). Pour
+contourner ça gratuitement :
 
-## 5. Partager avec des amis (via un lien, gratuit)
+1. Sur GitHub : **Settings > Secrets and variables > Actions** → ajouter un
+   secret `APP_URL` = l'adresse Render de l'étape précédente
+2. Le workflow `.github/workflows/ping.yml` (déjà dans le projet) va
+   automatiquement, toutes les 20 minutes : déclencher `/api/sync` (donc
+   récupérer les derniers cours depuis le CalDAV) et garder le service
+   réveillé.
 
-L'app tourne déjà en multi-utilisateurs : chaque prénom dans `/u/<prénom>/`
-a sa propre sélection et son propre lien `.ics`, sans se marcher dessus.
-Reste à rendre `python3 app.py` accessible depuis un lien, pas juste
-`localhost`. Les hébergeurs cloud gratuits avec stockage persistant ont
-quasiment disparu en 2026 (Render/Fly.io/Railway demandent tous quelques
-euros par mois pour ça) — l'option vraiment gratuite est d'exposer son
-propre ordinateur avec un **Cloudflare Tunnel** :
+**Coût réel : 0 €.** Limite honnête : le premier visiteur après une période
+vraiment creuse peut attendre ~20-30s le temps que Render se réveille (rare
+si le ping toutes les 20 min fonctionne bien).
+
+## 4. Alternative : partager depuis son ordinateur (option C)
+
+Si on ne veut pas créer de compte Neon/Render, on peut exposer l'app locale
+avec un tunnel gratuit — mais l'ordinateur doit rester allumé :
 
 ```bash
-# macOS
-brew install cloudflared
-
-# lancer l'app d'un côté
-python3 app.py
-
-# de l'autre, exposer le port 5050 (tunnel "rapide", aucun compte requis)
-cloudflared tunnel --url http://localhost:5050
+brew install cloudflared      # macOS
+python3 app.py                 # dans un terminal
+cloudflared tunnel --url http://localhost:5050   # dans un autre
 ```
 
-`cloudflared` affiche un lien du genre `https://xxxx.trycloudflare.com` —
-c'est ce lien à partager à ses amis (chacun va ensuite sur `/` pour choisir
-son prénom). Ce lien change à chaque redémarrage du tunnel ; pour un lien
-fixe et permanent, il faut un compte Cloudflare gratuit + un nom de domaine
-et créer un "named tunnel" (voir la doc Cloudflare Tunnel).
+`cloudflared` donne un lien `https://xxxx.trycloudflare.com` à partager.
+Ce lien change à chaque redémarrage du tunnel (pour un lien fixe, il faut un
+compte Cloudflare + un nom de domaine, voir la doc Cloudflare Tunnel).
 
-**Contrainte** : ça ne marche que si l'ordinateur et la commande
-`cloudflared` restent allumés. Si on veut que ça tourne 24/7 sans dépendre
-de son ordinateur, il faut alors un petit hébergeur payant (Render Starter,
-Railway Hobby, ~5-7 €/mois) avec un disque persistant pour `data.db`.
+## 5. Autre alternative : calendrier statique en lecture seule
+
+Pour une seule personne qui veut juste s'abonner sans interface de
+sélection en ligne, il y a aussi un mode "publication statique" via GitHub
+Pages (`ci_build.py`, `docs/`, `export_selection.py`,
+`.github/workflows/pages.yml`) — pas de stockage multi-utilisateurs, juste
+un `.ics` régénéré et publié automatiquement. Utile si l'option B semble
+trop lourde à mettre en place. Voir les commentaires en tête de
+`ci_build.py` pour la marche à suivre.
 
 ## Réglages utiles (`config.py`)
 
@@ -124,22 +120,23 @@ Railway Hobby, ~5-7 €/mois) avec un disque persistant pour `data.db`.
   ressemble pas à un code de cours (ex. `["Anglais"]`)
 - `SKIP_CALENDAR_SEGMENT_PREFIXES` : dossiers à ignorer entièrement (par
   défaut `["m2"]`)
+- `DATABASE_URL` (variable d'environnement) : URL Postgres pour la version
+  cloud ; absente = SQLite local automatiquement
 
 ## Structure du projet
 
 ```
 sorbonne-cal/
-├── app.py                 # serveur web local (multi-utilisateurs : /u/<prénom>/)
-├── sync.py                # synchronisation locale, régénère le .ics de tout le monde
-├── export_selection.py    # exporte la sélection d'une personne vers selection.json
-├── ci_build.py             # équivalent de sync.py mais pour GitHub Actions (une personne)
-├── caldav_client.py       # connexion CalDAV, récupération et filtrage
-├── models.py               # base SQLite (cours partagés + sélection par personne)
-├── ics_generator.py       # génération des fichiers .ics
-├── config.py               # réglages
-├── selection.json          # cours choisis pour la version cloud (généré, à committer)
-├── .github/workflows/sync.yml   # automatisation GitHub Actions
-├── docs/                   # site statique publié sur GitHub Pages
-├── static/ics/<prénom>.ics # fichier .ics de chaque personne (généré)
-└── templates/, static/     # pages web locales (landing.html, index.html...)
+├── app.py                    # serveur web (multi-utilisateurs : /u/<prénom>/)
+├── sync.py                   # synchronisation locale, régénère le .ics de tout le monde
+├── models.py                  # accès base de données (SQLite local OU Postgres cloud)
+├── caldav_client.py          # connexion CalDAV, récupération et filtrage
+├── ics_generator.py          # génération des fichiers .ics
+├── config.py                  # réglages
+├── render.yaml                 # blueprint de déploiement Render (option B)
+├── .github/workflows/ping.yml       # réveille + resynchronise le site Render (option B)
+├── .github/workflows/pages.yml      # publication statique GitHub Pages (option 5, optionnel)
+├── export_selection.py, ci_build.py, docs/   # utilisés seulement par l'option 5
+├── static/ics/<prénom>.ics   # fichier .ics de chaque personne (généré)
+└── templates/, static/        # pages web (landing.html, index.html...)
 ```

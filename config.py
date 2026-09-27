@@ -12,6 +12,16 @@ CALDAV_PASSWORD = os.environ.get("CALDAV_PASSWORD") or "guest"
 # ---- 本地存储 ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "data.db")
+# 没配置 DATABASE_URL 时用本地 SQLite（方便本地开发/测试）；
+# 部署到云端时设置 DATABASE_URL 指向 Neon/Supabase 这类免费云端 Postgres，
+# 数据就不会因为服务器重启/休眠而丢失。
+_raw_database_url = os.environ.get("DATABASE_URL") or f"sqlite:///{DB_PATH}"
+# Neon/Render/Heroku 这类平台给出的连接串常常是旧式的 postgres://，
+# SQLAlchemy 需要 postgresql:// 前缀，这里做个兼容转换。
+if _raw_database_url.startswith("postgres://"):
+    _raw_database_url = _raw_database_url.replace("postgres://", "postgresql://", 1)
+DATABASE_URL = _raw_database_url
+
 # 每个使用者(owner)各自的 .ics 文件放这个目录下，文件名是 <owner>.ics
 ICS_DIR = os.path.join(BASE_DIR, "static", "ics")
 
