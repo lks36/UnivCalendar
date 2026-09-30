@@ -6,6 +6,8 @@ via une page web, et génère un fichier `.ics` personnel à s'abonner sur son c
 (Apple Calendar, Google Calendar, etc.). Multi-utilisateurs : chaque prénom a son
 propre espace (`/u/<prénom>/`), sans se marcher dessus.
 
+---
+
 ## Lien du site : https://sorbonne-cal.onrender.com
 
 ## 1. Installation en local
