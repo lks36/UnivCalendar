@@ -65,6 +65,9 @@ saveBtn.addEventListener("click", async () => {
     if (data.ok) {
       saveResult.textContent = `Enregistré : ${data.count} groupe(s) sélectionné(s), ${data.event_count} événement(s) générés`;
       saveResult.className = "save-result ok";
+      // 选课变了，日历必须重新从服务器加载（之前的bug：这里没重置，日历一直显示旧数据）
+      calendarLoaded = false;
+      showTab("calendar");
     } else {
       throw new Error(data.message || "Échec de l'enregistrement");
     }
@@ -116,16 +119,18 @@ const tabButtons = [...document.querySelectorAll(".tab-btn")];
 const tabPanels = [...document.querySelectorAll(".tab-panel")];
 let calendarLoaded = false;
 
-tabButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
-    tabPanels.forEach((p) => {
-      p.hidden = p.dataset.tabPanel !== btn.dataset.tab;
-    });
-    if (btn.dataset.tab === "calendar" && !calendarLoaded) {
-      loadCalendar();
-    }
+function showTab(name) {
+  tabButtons.forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  tabPanels.forEach((p) => {
+    p.hidden = p.dataset.tabPanel !== name;
   });
+  if (name === "calendar" && !calendarLoaded) {
+    loadCalendar();
+  }
+}
+
+tabButtons.forEach((btn) => {
+  btn.addEventListener("click", () => showTab(btn.dataset.tab));
 });
 
 // ==================================================================
@@ -350,4 +355,25 @@ function showDayDetail(key, date, dayEvents) {
     })
     .join("");
   panel.innerHTML = `<div class="agenda-day-label">${label}</div>${rows}`;
+}
+
+
+// ==================================================================
+// Ouverture de la page : calendrier direct si on a déjà choisi ses cours
+// ==================================================================
+showTab(document.body.dataset.initialTab || "select");
+
+// Copier le lien personnel
+const copyLinkBtn = document.getElementById("copy-link-btn");
+if (copyLinkBtn) {
+  copyLinkBtn.addEventListener("click", async () => {
+    const link = document.getElementById("personal-link").textContent.trim();
+    try {
+      await navigator.clipboard.writeText(link);
+      copyLinkBtn.textContent = "Copié !";
+    } catch (e) {
+      copyLinkBtn.textContent = "Copie impossible, sélectionnez le lien";
+    }
+    setTimeout(() => (copyLinkBtn.textContent = "Copier le lien"), 2000);
+  });
 }

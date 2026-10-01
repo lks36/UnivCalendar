@@ -6,10 +6,10 @@
 <title>Mon emploi du temps — Sorbonne</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body data-owner="{{ owner }}">
+<body data-owner="{{ owner }}" data-initial-tab="{{ initial_tab }}">
   <header class="topbar">
     <div class="topbar-inner">
-      <h1>Mon emploi du temps <span class="owner-tag">— {{ owner }}</span></h1>
+      <h1>Mon emploi du temps</h1>
       <div class="sync-block">
         <span id="sync-status" class="sync-status">{{ sync_status.last_result or "Pas encore synchronisé" }}</span>
         <button id="sync-btn" class="btn btn-ghost">Resynchroniser</button>
@@ -17,8 +17,8 @@
     </div>
     <div class="topbar-inner tabs-row">
       <div class="tabs">
-        <button class="tab-btn active" data-tab="select">Sélection des cours</button>
         <button class="tab-btn" data-tab="calendar">Mon calendrier</button>
+        <button class="tab-btn" data-tab="select">Sélection des cours</button>
       </div>
     </div>
   </header>
@@ -85,6 +85,13 @@
         <button id="save-btn" class="btn btn-primary">Enregistrer</button>
         <button id="clear-btn" class="btn btn-ghost btn-block">Tout désélectionner</button>
         <div id="save-result" class="save-result"></div>
+
+        <details class="subscribe-block">
+          <summary>Mon lien personnel</summary>
+          <p class="side-hint small">Votre emploi du temps est mémorisé dans ce navigateur. Pour le retrouver sur un autre appareil (téléphone, autre ordinateur), ouvrez-y ce lien une fois. Gardez-le pour vous : quiconque l'a peut voir et modifier vos cours.</p>
+          <code id="personal-link">{{ request.host_url }}u/{{ owner }}/</code>
+          <button id="copy-link-btn" type="button" class="btn btn-ghost btn-block">Copier le lien</button>
+        </details>
 
         <details class="subscribe-block">
           <summary>Lien d'abonnement .ics <span class="optional-tag">(optionnel)</span></summary>
