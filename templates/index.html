@@ -63,19 +63,26 @@
 
     <!-- ===== Onglet 2 : calendrier visuel ===== -->
     <section class="panel tab-panel" data-tab-panel="calendar" hidden>
+      <div class="cal-toolbar">
+        <div class="cal-views">
+          <button type="button" class="cal-view-btn" data-view="day">Jour</button>
+          <button type="button" class="cal-view-btn" data-view="week">Semaine</button>
+          <button type="button" class="cal-view-btn" data-view="month">Mois</button>
+        </div>
+        <h2 id="cal-title" class="cal-title"></h2>
+        <div class="cal-nav">
+          <button type="button" id="cal-prev" class="cal-nav-btn" aria-label="Précédent">‹</button>
+          <button type="button" id="cal-today" class="cal-nav-btn cal-today-btn">Aujourd'hui</button>
+          <button type="button" id="cal-next" class="cal-nav-btn" aria-label="Suivant">›</button>
+        </div>
+      </div>
+
       <div id="calendar-loading" class="calendar-loading">Chargement du calendrier...</div>
-
       <div id="calendar-empty" class="calendar-empty" hidden>
-        Aucun cours sélectionné pour l'instant. Retournez sur "Sélection des cours" pour en cocher.
+        Aucun cours sélectionné pour l'instant. Allez dans « Sélection des cours » pour en cocher.
       </div>
-
-      <div id="calendar-content" hidden>
-        <h2 class="calendar-section-title">Les 14 prochains jours</h2>
-        <div id="agenda-list" class="agenda-list"></div>
-
-        <h2 class="calendar-section-title">Vue mensuelle (4 prochains mois)</h2>
-        <div id="month-grids" class="month-grids"></div>
-      </div>
+      <div id="cal-view" class="cal-view" hidden></div>
+      <div id="cal-detail" class="cal-detail" hidden></div>
     </section>
 
     <aside class="side">

@@ -334,3 +334,120 @@ body {
   text-align: center;
 }
 .landing-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ==================================================================
+   Calendrier : vues Jour / Semaine / Mois
+   ================================================================== */
+.layout.calendar-mode { grid-template-columns: 1fr; max-width: 1300px; }
+.layout.calendar-mode .side { display: none; }
+
+.cal-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.cal-views {
+  display: inline-flex; background: #ebe8e1; border-radius: 999px; padding: 3px;
+}
+.cal-view-btn {
+  border: none; background: transparent; padding: 6px 16px; border-radius: 999px;
+  font-size: 13.5px; cursor: pointer; color: var(--ink);
+}
+.cal-view-btn.active { background: white; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.cal-title { font-size: 22px; font-weight: 700; margin: 0; text-transform: capitalize; flex: 1; min-width: 180px; }
+.cal-nav { display: inline-flex; gap: 6px; }
+.cal-nav-btn {
+  border: none; background: #ebe8e1; border-radius: 999px; min-width: 34px; height: 34px;
+  font-size: 18px; cursor: pointer; color: var(--ink);
+}
+.cal-today-btn { font-size: 13.5px; padding: 0 16px; }
+.cal-nav-btn:hover, .cal-view-btn:hover { background: #dedad1; }
+.cal-view-btn.active:hover { background: white; }
+
+.cal-view {
+  border: 1px solid var(--line); border-radius: 12px; background: white; overflow: hidden;
+}
+
+/* --- grille horaire --- */
+.tg-header {
+  display: grid; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: white; z-index: 2;
+}
+.tg-dayhead {
+  border: none; background: transparent; padding: 10px 2px 8px; cursor: pointer;
+  display: flex; align-items: baseline; justify-content: center; gap: 5px; font-size: 14px; color: var(--ink);
+}
+.tg-dayhead.weekend { color: var(--muted); }
+.tg-dayhead:hover .tg-dayname { text-decoration: underline; }
+.tg-daynum { font-size: 18px; font-weight: 500; }
+.tg-daynum.today {
+  background: #e5484d; color: white; border-radius: 999px;
+  min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+}
+.tg-body { display: grid; position: relative; }
+.tg-hours { position: relative; border-right: 1px solid var(--line); }
+.tg-hour {
+  position: absolute; right: 8px; transform: translateY(-50%);
+  font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; background: white; padding: 0 2px;
+}
+.tg-hour:first-child { transform: none; }
+.tg-col {
+  position: relative; border-right: 1px solid #efece5;
+  background-image: repeating-linear-gradient(to bottom, #ebe8e1 0, #ebe8e1 1px, transparent 1px, transparent var(--hour));
+}
+.tg-col:last-child { border-right: none; }
+.tg-col.weekend { background-color: #faf9f6; }
+.tg-event {
+  position: absolute; border: none; border-left: 3px solid; border-radius: 6px;
+  padding: 4px 6px; text-align: left; overflow: hidden; cursor: pointer;
+  display: flex; flex-direction: column; gap: 1px; font: inherit;
+}
+.tg-event:hover { filter: brightness(0.97); z-index: 1; }
+.tg-ev-title { font-weight: 700; font-size: 12.5px; line-height: 1.25; word-break: break-word; }
+.tg-ev-meta { font-size: 11.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .9; }
+.tg-now { position: absolute; left: 0; right: 0; height: 2px; background: #e5484d; z-index: 3; pointer-events: none; }
+.tg-now::before {
+  content: ""; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: #e5484d;
+}
+
+/* --- vue mois --- */
+.mv-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.mv-weekday {
+  font-size: 12px; color: var(--muted); text-align: center; padding: 8px 0; border-bottom: 1px solid var(--line);
+}
+.mv-cell {
+  border: none; border-right: 1px solid #efece5; border-bottom: 1px solid #efece5; background: white;
+  min-height: 104px; padding: 4px; text-align: left; cursor: pointer; font: inherit;
+  display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+}
+.mv-cell:nth-child(7n) { border-right: none; }
+.mv-cell.other { background: #faf9f6; color: #b9b3a5; }
+.mv-cell:hover { background: #f6f4ef; }
+.mv-daynum { font-size: 13px; font-weight: 500; align-self: flex-end; padding: 2px 4px; }
+.mv-daynum.today { background: #e5484d; color: white; border-radius: 999px; min-width: 24px; text-align: center; font-weight: 700; }
+.mv-chip {
+  font-size: 11px; border-left: 3px solid; border-radius: 4px; padding: 1px 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mv-more { font-size: 11px; color: var(--muted); padding-left: 4px; }
+
+/* --- détail d'un cours --- */
+.cal-detail {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  width: min(420px, calc(100% - 32px)); background: white; border: 1px solid var(--line);
+  border-left: 5px solid; border-radius: 12px; padding: 14px 40px 14px 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.15); font-size: 14px; line-height: 1.6; z-index: 20;
+}
+.cal-detail-title { font-weight: 700; font-size: 15px; }
+.cal-detail-close {
+  position: absolute; top: 8px; right: 10px; border: none; background: transparent; font-size: 22px; cursor: pointer; color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .cal-title { font-size: 18px; order: -1; flex-basis: 100%; }
+  .tg-dayhead { flex-direction: column; align-items: center; gap: 0; font-size: 12px; }
+  .tg-daynum { font-size: 15px; }
+  .tg-ev-title { font-size: 11px; }
+  .mv-cell { min-height: 64px; }
+  .mv-chip { font-size: 0; height: 6px; padding: 0; }
+}
+.tg-hour:last-child { transform: translateY(-100%); }
+.tg-header { position: static; }

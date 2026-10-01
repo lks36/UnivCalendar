@@ -8,9 +8,6 @@ puis retrouve directement son emploi du temps à chaque visite.
   (cookie). Pour retrouver son emploi du temps sur un autre appareil, ouvrir
   le « lien personnel » affiché sur la page.
 - Lien `.ics` optionnel pour s'abonner depuis l'app Calendrier du téléphone.
----
-
-## Lien du site : https://sorbonne-cal.onrender.com
 
 ## En local
 

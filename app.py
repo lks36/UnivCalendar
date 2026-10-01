@@ -63,6 +63,10 @@ def _current_owner():
     except ValueError:
         return None
 
+@app.route("/health")
+def health():
+    """给 cron-job.org 保持唤醒用：只返回 ok，不渲染页面、不查数据库"""
+    return "ok", 200, {"Content-Type": "text/plain"}
 
 @app.before_request
 def _validate_owner_in_path():
@@ -126,12 +130,10 @@ def api_save_selection(owner):
 
 @app.route("/u/<owner>/api/calendar")
 def api_calendar(owner):
-    """返回从今天起到未来约4个月的这个人已选课程事件，供前端渲染可视化日历"""
+    """返回这个人已选课程的事件（过去5周 ~ 未来5个月），供前端周/日/月视图渲染"""
     today = datetime.date.today()
-    start = datetime.datetime.combine(today, datetime.time.min).isoformat()
-    end = datetime.datetime.combine(
-        today + datetime.timedelta(days=4 * 30), datetime.time.min
-    ).isoformat()
+    start = datetime.datetime.combine(today - datetime.timedelta(days=35), datetime.time.min).isoformat()
+    end = datetime.datetime.combine(today + datetime.timedelta(days=150), datetime.time.min).isoformat()
 
     rows = get_selected_events(owner, start=start, end=end)
     events = [
