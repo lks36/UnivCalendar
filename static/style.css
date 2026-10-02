@@ -451,3 +451,10 @@ body {
 }
 .tg-hour:last-child { transform: translateY(-100%); }
 .tg-header { position: static; }
+
+/* --- sélection : compteur + autosave --- */
+.selected-count { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.side-card .save-result { margin: 0 0 12px; min-height: 18px; font-size: 12.5px; color: var(--muted); }
+.side-card .save-result.ok { color: var(--accent); }
+.side-card .save-result.err { color: #b42318; }
+#search::-webkit-search-cancel-button { cursor: pointer; }

@@ -4,15 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mon emploi du temps — Sorbonne</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=asset_version) }}">
 </head>
 <body data-owner="{{ owner }}" data-initial-tab="{{ initial_tab }}">
   <header class="topbar">
     <div class="topbar-inner">
       <h1>Mon emploi du temps</h1>
       <div class="sync-block">
-        <span id="sync-status" class="sync-status">{{ sync_status.last_result or "Pas encore synchronisé" }}</span>
-        <button id="sync-btn" class="btn btn-ghost">Resynchroniser</button>
+        <span id="sync-status" class="sync-status" data-last-synced="{{ last_synced or '' }}"></span>
       </div>
     </div>
     <div class="topbar-inner tabs-row">
@@ -28,36 +27,11 @@
     <!-- ===== Onglet 1 : sélection des cours ===== -->
     <section class="panel tab-panel" data-tab-panel="select">
       <div class="panel-head">
-        <input id="search" type="text" placeholder="Rechercher un cours, un code..." autocomplete="off">
-        <span class="count" id="course-count">{{ total_courses }} cours</span>
+        <input id="search" type="search" placeholder="Rechercher un cours, un code..." autocomplete="off">
+        <span class="count" id="course-count"></span>
       </div>
-
       <div id="course-list" class="course-list">
-        {% for g in groups %}
-        <details class="direction-block">
-          <summary class="direction-title">{{ g.master_group }} <span class="direction-count">({{ g.courses|length }})</span></summary>
-          <div class="direction-courses">
-            {% for c in g.courses %}
-            <div class="course-card" data-key="{{ (c.course_key ~ ' ' ~ g.master_group)|lower }}">
-              <div class="course-title">
-                <span class="course-name">{{ c.course_key }}</span>
-              </div>
-              <div class="session-row">
-                {% for session_key, session_label in c.sessions %}
-                <label class="chip">
-                  <input type="checkbox"
-                         data-course="{{ c.course_key }}"
-                         data-session="{{ session_key }}"
-                         {% if (c.course_key, session_key) in selected %}checked{% endif %}>
-                  <span>{{ session_label }}</span>
-                </label>
-                {% endfor %}
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-        </details>
-        {% endfor %}
+        <div class="calendar-loading">Chargement des cours...</div>
       </div>
     </section>
 
@@ -88,10 +62,11 @@
     <aside class="side">
       <div class="side-card">
         <h2>Ma sélection</h2>
-        <p class="side-hint">Cochez vos cours et groupes, puis enregistrez pour voir votre calendrier.</p>
-        <button id="save-btn" class="btn btn-primary">Enregistrer</button>
-        <button id="clear-btn" class="btn btn-ghost btn-block">Tout désélectionner</button>
+        <p class="side-hint">Cochez vos cours et groupes : chaque modification est enregistrée automatiquement.</p>
+        <div id="selected-count" class="selected-count">0 groupe sélectionné</div>
         <div id="save-result" class="save-result"></div>
+        <button id="save-btn" class="btn btn-primary">Voir mon calendrier</button>
+        <button id="clear-btn" class="btn btn-ghost btn-block">Tout désélectionner</button>
 
         <details class="subscribe-block">
           <summary>Mon lien personnel</summary>
@@ -109,6 +84,7 @@
     </aside>
   </main>
 
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script id="initial-events" type="application/json">{{ initial_events|tojson }}</script>
+  <script src="{{ url_for('static', filename='app.js', v=asset_version) }}"></script>
 </body>
 </html>

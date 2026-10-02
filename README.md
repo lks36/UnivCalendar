@@ -30,8 +30,8 @@ Sans `DATABASE_URL`, les données sont stockées dans un fichier SQLite local
    choisir ce dépôt (`render.yaml` est lu automatiquement), coller la
    connection string dans `DATABASE_URL`.
 3. **Tâches planifiées** sur [cron-job.org](https://cron-job.org) :
-   - toutes les 10 min, GET `https://<site>.onrender.com/` (évite la mise en
-     veille de Render)
+   - toutes les 10 min, GET `https://<site>.onrender.com/health` (évite la
+     mise en veille de Render)
    - 2 fois par jour, GET `https://<site>.onrender.com/api/sync`
      (rafraîchit les cours)
 

@@ -44,7 +44,7 @@ for _prefix in ("postgres://", "postgresql://"):
 DATABASE_URL = _raw_database_url
 
 # 每个使用者(owner)各自的 .ics 文件放这个目录下，文件名是 <owner>.ics
-ICS_DIR = os.path.join(BASE_DIR, "static", "ics")
+ICS_DIR = os.path.join(BASE_DIR, "static", "ics")  # 已不再使用，保留兼容
 
 # ---- 同步范围 ----
 # 只抓取这几个未来月份内的事件，避免拉取过多历史数据

@@ -37,6 +37,8 @@ SCHEMA_STATEMENTS = [
         PRIMARY KEY (owner, course_key, session_key)
     )
     """,
+    "CREATE INDEX IF NOT EXISTS idx_events_course ON events (course_key)",
+    "CREATE INDEX IF NOT EXISTS idx_events_dtstart ON events (dtstart)",
 ]
 
 
@@ -204,3 +206,9 @@ def get_selected_events(owner: str, start: str | None = None, end: str | None = 
         seen.add(dedup_key)
         deduped.append(row)
     return deduped
+
+
+def get_last_synced() -> str | None:
+    """课程数据最近一次同步的时间（ISO 字符串），没有数据时返回 None"""
+    with engine.begin() as conn:
+        return conn.execute(text("SELECT MAX(last_synced) FROM events")).scalar()
