@@ -5,7 +5,7 @@ import secrets
 import threading
 import time
 
-from flask import Flask, Response, abort, jsonify, make_response, redirect, render_template, request, url_for
+from flask import Flask, Response, g, abort, jsonify, make_response, redirect, render_template, request, url_for
 from flask_compress import Compress
 
 from config import SECRET_KEY
@@ -61,6 +61,37 @@ def _cached_courses():
 def _invalidate_cache():
     with _cache_lock:
         _cache["loaded"] = False
+        _owner_cache.clear()
+
+
+# 每个用户的"已选场次 + 日历数据"也放内存：老用户再次打开网站时完全不用查数据库，
+# 这样 Neon 免费版休眠了也不会拖慢页面。保存选课、课表同步后会自动更新。
+_owner_cache = {}  # owner -> {"day": date, "selection": set, "events": list}
+
+
+def _owner_data(owner):
+    today = datetime.date.today()
+    with _cache_lock:
+        entry = _owner_cache.get(owner)
+        if entry and entry["day"] == today:
+            return entry
+    entry = {"day": today, "selection": get_selection(owner), "events": _calendar_events_db(owner)}
+    with _cache_lock:
+        _owner_cache[owner] = entry
+    return entry
+
+
+@app.before_request
+def _start_timer():
+    g._t0 = time.perf_counter()
+
+
+@app.after_request
+def _server_timing(response):
+    t0 = getattr(g, "_t0", None)
+    if t0 is not None:
+        response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.1f}"
+    return response
 
 
 @app.context_processor
@@ -102,7 +133,7 @@ def _validate_owner_in_path():
             abort(404)
 
 
-def _calendar_events(owner):
+def _calendar_events_db(owner):
     """这个人已选课程的事件（过去5周 ~ 未来5个月），前端周/日/月视图用"""
     today = datetime.date.today()
     start = datetime.datetime.combine(today - datetime.timedelta(days=35), datetime.time.min).isoformat()
@@ -137,8 +168,11 @@ def home():
 
     # 首页只带"日历数据"，不再把几百门课程全部渲染进 HTML：
     # 课程列表等用户真的点开"选课"时才去 /api/courses 加载。
-    has_selection = bool(get_selection(owner)) if not is_new else False
-    events = _calendar_events(owner) if has_selection else []
+    if is_new:
+        has_selection, events = False, []  # 新用户：一次数据库都不用查
+    else:
+        data = _owner_data(owner)
+        has_selection, events = bool(data["selection"]), data["events"]
     _, last_synced = _cached_courses()
 
     response = make_response(
@@ -169,7 +203,7 @@ def personal_link(owner):
 def api_courses(owner):
     """全部课程（内存缓存）+ 这个人已勾选的场次"""
     courses, _ = _cached_courses()
-    selected = [[ck, sk] for ck, sk in get_selection(owner)]
+    selected = [[ck, sk] for ck, sk in _owner_data(owner)["selection"]]
     return jsonify({"groups": courses["groups"], "total": courses["total"], "selected": selected})
 
 
@@ -179,12 +213,19 @@ def api_save_selection(owner):
     payload = request.get_json(force=True)
     pairs = [(item["course_key"], item["session_type"]) for item in payload.get("selection", [])]
     save_selection(owner, pairs)
-    return jsonify({"ok": True, "count": len(pairs), "events": _calendar_events(owner)})
+    entry = {
+        "day": datetime.date.today(),
+        "selection": {(ck, st.strip().lower()) for ck, st in pairs},
+        "events": _calendar_events_db(owner),
+    }
+    with _cache_lock:
+        _owner_cache[owner] = entry
+    return jsonify({"ok": True, "count": len(pairs), "events": entry["events"]})
 
 
 @app.route("/u/<owner>/api/calendar")
 def api_calendar(owner):
-    return jsonify({"events": _calendar_events(owner)})
+    return jsonify({"events": _owner_data(owner)["events"]})
 
 
 @app.route("/u/<owner>/mon_emploi_du_temps.ics")
