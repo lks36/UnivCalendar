@@ -29,14 +29,17 @@ Sans `DATABASE_URL`, les données sont stockées dans un fichier SQLite local
 2. **Site** : sur [render.com](https://render.com) → New → Blueprint →
    choisir ce dépôt (`render.yaml` est lu automatiquement), coller la
    connection string dans `DATABASE_URL`.
-3. **Tâches planifiées** sur [cron-job.org](https://cron-job.org) :
-   - toutes les 10 min, GET `https://<site>.onrender.com/health` (évite la
-     mise en veille de Render)
-   - 2 fois par jour, GET `https://<site>.onrender.com/api/sync`
-     (rafraîchit les cours)
+3. **Maintien en éveil** (optionnel mais recommandé) : sur
+   [UptimeRobot](https://uptimerobot.com), créer un moniteur HTTP(s) sur
+   `https://<site>.onrender.com/health` toutes les 5 min.
 
-Optionnel : définir `SYNC_TOKEN` dans les variables d'environnement Render ;
-`/api/sync` exige alors `?token=<valeur>`.
+Les cours se mettent à jour tout seuls : au démarrage du service et à chaque
+visite, si les données ont plus de 12 h (`AUTO_SYNC_HOURS`), une
+synchronisation est lancée en arrière-plan. Aucune tâche planifiée n'est
+nécessaire pour ça.
+
+Optionnel : `SYNC_TOKEN` protège `/api/sync` (synchronisation manuelle,
+`?token=<valeur>`).
 
 ## Réglages (`config.py`)
 

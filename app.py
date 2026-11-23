@@ -161,6 +161,10 @@ def health():
 
 @app.route("/")
 def home():
+    try:
+        _maybe_auto_sync()  # 不阻塞：需要时只是启动一个后台线程
+    except Exception:
+        logger.exception("自动同步检查失败")
     owner = _current_owner()
     is_new = owner is None
     if is_new:
@@ -259,6 +263,55 @@ def _run_sync_background():
         _sync_status["running"] = False
 
 
+# ==================================================================
+# 自动同步：不依赖外部定时任务。服务启动时、有人打开网站时检查一下，
+# 课表超过 AUTO_SYNC_HOURS 小时没更新，就在后台自动拉一次（页面照常立即显示现有数据）。
+# ==================================================================
+AUTO_SYNC_HOURS = float(os.environ.get("AUTO_SYNC_HOURS", "12"))
+AUTO_SYNC_RETRY_MINUTES = 30  # 学校服务器出问题时，最多每30分钟重试一次
+_last_auto_attempt = 0.0
+
+
+def _start_sync_thread():
+    def _target():
+        with _sync_lock:
+            _run_sync_background()
+
+    threading.Thread(target=_target, daemon=True).start()
+
+
+def _maybe_auto_sync():
+    global _last_auto_attempt
+    if os.environ.get("DISABLE_AUTO_SYNC") == "1":
+        return
+    if _sync_lock.locked() or _sync_status["running"]:
+        return
+    if time.time() - _last_auto_attempt < AUTO_SYNC_RETRY_MINUTES * 60:
+        return
+    _, last_synced = _cached_courses()
+    if last_synced:
+        try:
+            age_h = (datetime.datetime.now(datetime.timezone.utc)
+                     - datetime.datetime.fromisoformat(last_synced)).total_seconds() / 3600
+        except ValueError:
+            age_h = float("inf")
+        if age_h < AUTO_SYNC_HOURS:
+            return
+    _last_auto_attempt = time.time()
+    logger.info("课表数据已过期（或为空），自动在后台同步")
+    _start_sync_thread()
+
+
+def _auto_sync_on_startup():
+    try:
+        _maybe_auto_sync()
+    except Exception:
+        logger.exception("启动时检查自动同步失败")
+
+
+threading.Thread(target=_auto_sync_on_startup, daemon=True).start()
+
+
 @app.route("/api/sync", methods=["GET", "POST"])
 def api_sync():
     """触发一次全量同步（后台线程）。设置了环境变量 SYNC_TOKEN 时需要 ?token=口令"""
@@ -268,11 +321,7 @@ def api_sync():
     if _sync_lock.locked() or _sync_status["running"]:
         return jsonify({"ok": False, "message": "Synchronisation déjà en cours"}), 409
 
-    def _target():
-        with _sync_lock:
-            _run_sync_background()
-
-    threading.Thread(target=_target, daemon=True).start()
+    _start_sync_thread()
     return jsonify({"ok": True, "message": "Synchronisation lancée"})
 
 
