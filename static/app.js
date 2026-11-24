@@ -17,10 +17,12 @@ function esc(str) {
 // ==================================================================
 // Date de dernière mise à jour des cours
 // ==================================================================
-(function showLastSynced() {
-  const el = document.getElementById("sync-status");
-  const raw = el.dataset.lastSynced;
-  if (!raw) { el.textContent = ""; return; }
+const syncStatusEl = document.getElementById("sync-status");
+const refreshBtn = document.getElementById("refresh-btn");
+
+function setLastSynced(raw) {
+  if (!raw) { syncStatusEl.textContent = ""; return; }
+  syncStatusEl.dataset.lastSynced = raw;
   const d = new Date(raw);
   const mins = Math.round((Date.now() - d) / 60000);
   let rel;
@@ -28,9 +30,74 @@ function esc(str) {
   else if (mins < 60) rel = `il y a ${mins} min`;
   else if (mins < 60 * 24) rel = `il y a ${Math.round(mins / 60)} h`;
   else rel = `le ${d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`;
-  el.textContent = `Cours mis à jour ${rel}`;
-  el.title = d.toLocaleString("fr-FR");
-})();
+  syncStatusEl.textContent = `Cours mis à jour ${rel}`;
+  syncStatusEl.title = d.toLocaleString("fr-FR");
+}
+setLastSynced(syncStatusEl.dataset.lastSynced);
+setInterval(() => { if (!refreshBtn.disabled) setLastSynced(syncStatusEl.dataset.lastSynced); }, 60000);
+
+// ---- Bouton "Actualiser" ----
+let syncPoll = null;
+
+function showSyncing() {
+  refreshBtn.disabled = true;
+  refreshBtn.textContent = "Actualisation…";
+  syncStatusEl.textContent = "Récupération des changements…";
+  if (syncPoll) return;
+  const before = syncStatusEl.dataset.lastSynced || "";
+  syncPoll = setInterval(async () => {
+    try {
+      const res = await fetch("/api/sync-status");
+      const data = await res.json();
+      if (data.running) return;
+      clearInterval(syncPoll); syncPoll = null;
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = "↻ Actualiser";
+      if (data.last_synced && data.last_synced !== before) {
+        setLastSynced(data.last_synced);
+        // Recharger le calendrier et la liste des cours avec les nouvelles données
+        const cres = await fetch(`${API_BASE}/api/calendar`);
+        setCalendarEvents((await cres.json()).events);
+        coursesLoaded = false;
+        if (!document.querySelector('[data-tab-panel="select"]').hidden) loadCourses();
+      } else {
+        setLastSynced(syncStatusEl.dataset.lastSynced);
+        if (data.last_result === "error") syncStatusEl.textContent = "Site de l'université injoignable, réessayez plus tard";
+      }
+    } catch (e) { /* on réessaie au prochain tour */ }
+  }, 4000);
+}
+
+refreshBtn.addEventListener("click", async () => {
+  refreshBtn.disabled = true;
+  try {
+    const res = await fetch("/api/refresh", { method: "POST" });
+    const data = await res.json();
+    if (data.running) { showSyncing(); return; }
+    refreshBtn.disabled = false;
+    if (data.fresh) {
+      setLastSynced(syncStatusEl.dataset.lastSynced);
+      syncStatusEl.textContent += " — déjà à jour";
+    }
+  } catch (e) {
+    refreshBtn.disabled = false;
+    syncStatusEl.textContent = `Erreur : ${e.message}`;
+  }
+});
+
+if (document.body.dataset.syncRunning) showSyncing();
+
+// ---- Copier le lien d'abonnement ----
+const copyIcsBtn = document.getElementById("copy-ics-btn");
+copyIcsBtn.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(copyIcsBtn.dataset.url);
+    copyIcsBtn.textContent = "Lien copié !";
+  } catch (e) {
+    prompt("Copiez ce lien :", copyIcsBtn.dataset.url);
+  }
+  setTimeout(() => (copyIcsBtn.textContent = "Copier le lien"), 2000);
+});
 
 // ==================================================================
 // Sélection des cours : chargée seulement à la première ouverture de l'onglet

@@ -90,6 +90,57 @@ def replace_events(events: list[dict]):
             )
 
 
+# ------------------------------------------------------------------
+# 分批同步：每抓完一个日历就写进临时表 events_staging（不在内存里堆几万条），
+# 全部抓完后在一个事务里替换 events。中途失败的话 events 完全不受影响。
+# ------------------------------------------------------------------
+_EVENT_COLS = ("uid, calendar_path, master_group, course_key, session_type, summary, "
+               "location, description, dtstart, dtend, ical_raw, last_synced")
+
+
+def staging_reset():
+    with engine.begin() as conn:
+        conn.execute(text(SCHEMA_STATEMENTS[0].replace("CREATE TABLE IF NOT EXISTS events",
+                                                       "CREATE TABLE IF NOT EXISTS events_staging")))
+        conn.execute(text("DELETE FROM events_staging"))
+
+
+def staging_add(events: list[dict]):
+    if not events:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(f"INSERT INTO events_staging ({_EVENT_COLS}) VALUES "
+                 "(:uid, :calendar_path, :master_group, :course_key, :session_type, :summary, "
+                 ":location, :description, :dtstart, :dtend, :ical_raw, :last_synced)"),
+            events,
+        )
+
+
+def get_event_paths() -> set[str]:
+    """正式表里目前有数据的日历路径"""
+    with engine.begin() as conn:
+        return {r[0] for r in conn.execute(text("SELECT DISTINCT calendar_path FROM events"))}
+
+
+def staging_commit(keep_old_paths: list[str]) -> tuple[int, int]:
+    """用临时表替换正式表。
+    keep_old_paths：这次没抓到任何数据的日历（请求失败、或整个日历凭空消失），保留它们的旧数据。
+    课程数量变少（比如罢课期间大量取消）是正常情况，照常替换。"""
+    with engine.begin() as conn:
+        for path in keep_old_paths:
+            conn.execute(text(f"INSERT INTO events_staging ({_EVENT_COLS}) SELECT {_EVENT_COLS} "
+                              "FROM events WHERE calendar_path = :p"), {"p": path})
+        new = conn.execute(text("SELECT COUNT(*) FROM events_staging")).scalar()
+        old = conn.execute(text("SELECT COUNT(*) FROM events")).scalar()
+        if new == 0:
+            raise RuntimeError("没有任何数据，已保留旧数据")
+        conn.execute(text("DELETE FROM events"))
+        conn.execute(text(f"INSERT INTO events ({_EVENT_COLS}) SELECT {_EVENT_COLS} FROM events_staging"))
+        conn.execute(text("DELETE FROM events_staging"))
+    return new, old
+
+
 def get_course_groups():
     """按 Master 分类 -> 课程 -> 场次 的三层结构返回全部课程（全站共享，与 owner 无关）"""
     with engine.begin() as conn:

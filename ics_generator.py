@@ -3,9 +3,11 @@
 避免自己重新计算时区/夏令时。
 """
 
+import datetime
 import os
 
 from icalendar import Calendar, Event
+from icalendar.prop import vDuration
 
 from config import ICS_DIR
 
@@ -16,6 +18,9 @@ def build_ics(event_rows) -> bytes:
     cal.add("version", "2.0")
     cal.add("x-wr-calname", "Mon emploi du temps")
     cal.add("x-wr-timezone", "Europe/Paris")
+    # 告诉订阅的日历 App 建议每小时刷新一次（苹果/谷歌日历会参考这个值）
+    cal.add("refresh-interval", vDuration(datetime.timedelta(hours=1)), parameters={"VALUE": "DURATION"})
+    cal.add("x-published-ttl", "PT1H")
 
     for row in event_rows:
         # row["ical_raw"] 是单个 VEVENT 的原始文本，重新解析后加入总日历，

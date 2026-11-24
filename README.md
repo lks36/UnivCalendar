@@ -33,13 +33,22 @@ Sans `DATABASE_URL`, les données sont stockées dans un fichier SQLite local
    [UptimeRobot](https://uptimerobot.com), créer un moniteur HTTP(s) sur
    `https://<site>.onrender.com/health` toutes les 5 min.
 
-Les cours se mettent à jour tout seuls : au démarrage du service et à chaque
-visite, si les données ont plus de 12 h (`AUTO_SYNC_HOURS`), une
-synchronisation est lancée en arrière-plan. Aucune tâche planifiée n'est
-nécessaire pour ça.
+Les cours se mettent à jour tout seuls : le site vérifie toutes les 10 min et
+relance une synchronisation si les données ont plus de 3 h (`AUTO_SYNC_HOURS`).
+La synchronisation tourne dans un processus séparé, le site reste réactif
+pendant ce temps. Le bouton « Actualiser » permet aussi de la lancer à la main
+(au plus une fois toutes les 10 min). `DISABLE_AUTO_SYNC=1` désactive
+la synchronisation automatique.
 
-Optionnel : `SYNC_TOKEN` protège `/api/sync` (synchronisation manuelle,
+Optionnel : `SYNC_TOKEN` protège `/api/sync` (synchronisation forcée,
 `?token=<valeur>`).
+
+## Abonnement depuis l'app Calendrier
+
+Sous le calendrier, « S'abonner (Apple Calendrier) » ouvre le lien `webcal://`.
+Sur Mac, choisir l'emplacement **iCloud** pour que l'abonnement apparaisse
+aussi sur l'iPhone. Un fichier `.ics` *importé* ne se met jamais à jour ; seul
+un *abonnement* suit les changements.
 
 ## Réglages (`config.py`)
 

@@ -175,8 +175,8 @@ def fetch_calendar_events(calendar: caldav.Calendar, calendar_path: str) -> list
     try:
         results = calendar.date_search(start=start, end=end, expand=True)
     except Exception as e:
-        logger.warning("跳过日历 %s（请求失败: %s）", calendar_path, e)
-        return []
+        logger.warning("日历 %s 请求失败: %s", calendar_path, e)
+        return None
 
     master_group = master_group_from_path(calendar_path)
     events = []
@@ -222,23 +222,26 @@ def fetch_calendar_events(calendar: caldav.Calendar, calendar_path: str) -> list
     return events
 
 
-def sync_all() -> list[dict]:
-    """主入口：递归发现所有日历 + 抓取全部事件，返回待入库列表"""
+def iter_calendar_events():
+    """逐个日历抓取：每次产出 (日历路径, 事件列表)；请求失败时事件列表为 None。
+    一次只在内存里放一个日历的数据。"""
     client = get_client()
     leaf_urls = discover_leaf_calendars()
     logger.info("递归发现 %d 个日历", len(leaf_urls))
-
-    all_events = []
     for leaf_url in leaf_urls:
         calendar_path = leaf_url.split("/caldav.php/")[-1].strip("/")
-
         if is_excluded_calendar(calendar_path):
-            logger.info("  %s -> 跳过（M2 方向）", calendar_path)
             continue
-
         cal = caldav.Calendar(client=client, url=leaf_url)
         events = fetch_calendar_events(cal, calendar_path)
-        logger.info("  %s -> %d 个事件", calendar_path, len(events))
-        all_events.extend(events)
+        if events is not None:
+            logger.info("  %s -> %d 个事件", calendar_path, len(events))
+        yield calendar_path, events
 
+
+def sync_all() -> list[dict]:
+    """一次性返回全部事件（兼容旧用法；网站里用的是 sync.py 的分批方式）"""
+    all_events = []
+    for _, events in iter_calendar_events():
+        all_events.extend(events or [])
     return all_events
