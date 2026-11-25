@@ -149,8 +149,9 @@ def _calendar_events_db(owner):
             "location": r["location"],
             "start": r["dtstart"],
             "end": r["dtend"],
+            "status": r["status"],  # selected / suggested（疑似改名或新场次，等用户确认）
         }
-        for r in get_selected_events(owner, start=start, end=end)
+        for r in models.get_owner_events(owner, start=start, end=end)
     ]
 
 
@@ -229,6 +230,27 @@ def api_save_selection(owner):
     with _cache_lock:
         _owner_cache[owner] = entry
     return jsonify({"ok": True, "count": len(pairs), "events": entry["events"]})
+
+
+def _refresh_owner_cache(owner):
+    entry = {"day": datetime.date.today(), "selection": get_selection(owner), "events": _calendar_events_db(owner)}
+    with _cache_lock:
+        _owner_cache[owner] = entry
+    return entry
+
+
+@app.route("/u/<owner>/api/session-action", methods=["POST"])
+def api_session_action(owner):
+    """日历上虚线框的课：action=add 加入课表，action=dismiss 以后不再提示"""
+    payload = request.get_json(force=True)
+    ck, st, action = payload.get("course_key"), payload.get("session_type"), payload.get("action")
+    if not ck or not st or action not in ("add", "dismiss"):
+        return jsonify({"ok": False}), 400
+    if action == "add":
+        models.add_selection_item(owner, ck, st)
+    else:
+        models.dismiss_item(owner, ck, st)
+    return jsonify({"ok": True, "events": _refresh_owner_cache(owner)["events"]})
 
 
 @app.route("/u/<owner>/api/calendar")

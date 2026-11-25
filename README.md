@@ -50,6 +50,16 @@ Sur Mac, choisir l'emplacement **iCloud** pour que l'abonnement apparaisse
 aussi sur l'iPhone. Un fichier `.ics` *importé* ne se met jamais à jour ; seul
 un *abonnement* suit les changements.
 
+## Noms de séances qui changent
+
+Les enseignants renomment souvent les séances (ex. « TME » devient « CS/TME »).
+`matching.py` compare les séances par code d'UE et par morceaux de nom : une
+séance renommée qui contient le groupe choisi est ajoutée automatiquement, les
+autres groupes restent masqués. Une séance nouvelle qu'il ne sait pas classer
+(examen, rattrapage…) apparaît en pointillés sur le calendrier avec
+« Ajouter » / « Ignorer » ; elle n'entre dans l'abonnement `.ics` qu'une fois
+ajoutée.
+
 ## Réglages (`config.py`)
 
 - `JUNK_KEYWORDS` : événements ignorés (stage, soutenance, vacances...)

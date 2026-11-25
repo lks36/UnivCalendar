@@ -346,6 +346,36 @@ async function loadCalendar() {
   }
 }
 
+// Séances à vérifier (à venir), regroupées par cours + type de séance
+function upcomingSuggestions() {
+  const now = startOfDay(new Date());
+  const seen = new Map();
+  cal.events
+    .filter((ev) => ev.status === "suggested" && ev.end >= now)
+    .sort((a, b) => a.start - b.start)
+    .forEach((ev) => {
+      const k = `${ev.course_key}\u0000${ev.session_type.toLowerCase()}`;
+      if (!seen.has(k)) seen.set(k, ev);
+    });
+  return [...seen.values()];
+}
+
+function updateSuggestBadge() {
+  const badge = document.getElementById("suggest-badge");
+  const list = upcomingSuggestions();
+  badge.hidden = list.length === 0;
+  badge.textContent = `${list.length} séance${list.length > 1 ? "s" : ""} à vérifier`;
+}
+
+document.getElementById("suggest-badge").addEventListener("click", () => {
+  const first = upcomingSuggestions()[0];
+  if (!first) return;
+  cal.cursor = startOfDay(first.start);
+  if (cal.view === "month") cal.view = "week";
+  renderCalendar();
+  showEventDetail(first);
+});
+
 function renderCalendar() {
   try { localStorage.setItem("cal-view", cal.view); } catch (e) {}
   document.getElementById("calendar-loading").hidden = true;
@@ -354,6 +384,7 @@ function renderCalendar() {
   document.getElementById("cal-view").hidden = empty;
   if (empty) return;
   document.querySelectorAll(".cal-view-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === cal.view));
+  updateSuggestBadge();
   const title = document.getElementById("cal-title");
   const c = cal.cursor;
   if (cal.view === "day") {
@@ -409,9 +440,10 @@ function renderTimeGrid(days) {
       const height = Math.max(22, (ev.end - ev.start) / 3600000 * HOUR_PX - 2);
       const col = courseColor(ev.course_key);
       const idx = cal.events.indexOf(ev);
-      inner += `<button type="button" class="tg-event" data-idx="${idx}"
+      const sug = ev.status === "suggested";
+      inner += `<button type="button" class="tg-event${sug ? " suggested" : ""}" data-idx="${idx}" title="${sug ? "À vérifier : pas encore dans votre sélection" : ""}"
           style="top:${top}px;height:${height}px;left:calc(${(lane / lanes) * 100}% + 2px);width:calc(${100 / lanes}% - 4px);background:${col.bg};border-left-color:${col.bar};color:${col.text}">
-        <span class="tg-ev-title">${esc(ev.course_key)}-${esc(ev.session_type)}</span>
+        <span class="tg-ev-title">${sug ? "? " : ""}${esc(ev.course_key)}-${esc(ev.session_type)}</span>
         ${ev.location ? `<span class="tg-ev-meta">📍 ${esc(ev.location)}</span>` : ""}
         <span class="tg-ev-meta">${formatTime(ev.start)}–${formatTime(ev.end)}</span>
       </button>`;
@@ -483,7 +515,7 @@ function renderMonth(c) {
     const other = d.getMonth() !== c.getMonth();
     let chips = evs.slice(0, 3).map((ev) => {
       const col = courseColor(ev.course_key);
-      return `<div class="mv-chip" style="background:${col.bg};color:${col.text};border-left-color:${col.bar}">${formatTime(ev.start)} ${esc(ev.course_key.split("-").slice(1).join("-") || ev.course_key)}</div>`;
+      return `<div class="mv-chip${ev.status === "suggested" ? " suggested" : ""}" style="background:${col.bg};color:${col.text};border-left-color:${col.bar}">${formatTime(ev.start)} ${esc(ev.course_key.split("-").slice(1).join("-") || ev.course_key)}</div>`;
     }).join("");
     if (evs.length > 3) chips += `<div class="mv-more">+${evs.length - 3}</div>`;
     html += `<button type="button" class="mv-cell${other ? " other" : ""}" data-date="${dateKey(d)}">
@@ -505,13 +537,39 @@ function renderMonth(c) {
 function showEventDetail(ev) {
   const box = document.getElementById("cal-detail");
   const col = courseColor(ev.course_key);
+  const sug = ev.status === "suggested";
   box.style.borderLeftColor = col.bar;
   box.innerHTML = `<button type="button" class="cal-detail-close" aria-label="Fermer">×</button>
     <div class="cal-detail-title">${esc(ev.course_key)} — ${esc(ev.session_type)}</div>
     <div>${ev.start.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}, ${formatTime(ev.start)}–${formatTime(ev.end)}</div>
-    ${ev.location ? `<div>📍 ${esc(ev.location)}</div>` : ""}`;
+    ${ev.location ? `<div>📍 ${esc(ev.location)}</div>` : ""}
+    ${sug ? `<div class="cal-detail-suggest">
+        <p>Cette séance n'est pas dans votre sélection (nouveau nom, nouvelle séance ou examen ?).</p>
+        <div class="cal-detail-actions">
+          <button type="button" class="btn btn-primary" data-action="add">Ajouter à mon emploi du temps</button>
+          <button type="button" class="btn btn-ghost" data-action="dismiss">Ignorer</button>
+        </div>
+        <p class="cal-detail-note">S'applique à toutes les séances « ${esc(ev.session_type)} » de ${esc(ev.course_key)}.</p>
+      </div>` : ""}`;
   box.hidden = false;
   box.querySelector(".cal-detail-close").addEventListener("click", () => (box.hidden = true));
+  box.querySelectorAll("[data-action]").forEach((btn) => btn.addEventListener("click", async () => {
+    box.querySelectorAll("[data-action]").forEach((b) => (b.disabled = true));
+    try {
+      const res = await fetch(`${API_BASE}/api/session-action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ course_key: ev.course_key, session_type: ev.session_type, action: btn.dataset.action }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setCalendarEvents((await res.json()).events);
+      coursesLoaded = false; // la liste des cours devra refléter le nouvel état
+      box.hidden = true;
+    } catch (e) {
+      box.querySelectorAll("[data-action]").forEach((b) => (b.disabled = false));
+      alert(`Erreur : ${e.message}`);
+    }
+  }));
 }
 
 // ---- Barre d'outils ----

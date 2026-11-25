@@ -473,3 +473,19 @@ body {
 .subscribe-help summary { cursor: pointer; font-weight: 600; }
 .subscribe-help ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.6; }
 #refresh-btn:disabled { opacity: .6; cursor: default; }
+
+/* --- séances à vérifier (nom changé, nouvelle séance, examen…) --- */
+.tg-event.suggested, .mv-chip.suggested {
+  background: repeating-linear-gradient(135deg, #fff 0 6px, #f6f4ef 6px 12px) !important;
+  border: 1.5px dashed currentColor; border-left-width: 3px; border-left-style: dashed; opacity: .85;
+}
+.suggest-badge {
+  border: 1px solid #e0a43a; background: #fff6e5; color: #8a5a00; border-radius: 999px;
+  padding: 5px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.suggest-badge:hover { background: #ffeccc; }
+.cal-detail-suggest { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.cal-detail-suggest p { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.cal-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cal-detail-actions .btn-primary { width: auto; }
+.cal-detail-note { font-size: 12px !important; margin-top: 8px !important; }

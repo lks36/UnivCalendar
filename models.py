@@ -5,6 +5,7 @@ import re
 from sqlalchemy import create_engine, text
 
 from config import DATABASE_URL
+from matching import classify, ue_codes
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 
@@ -31,6 +32,14 @@ SCHEMA_STATEMENTS = [
     """,
     """
     CREATE TABLE IF NOT EXISTS selection (
+        owner TEXT NOT NULL,
+        course_key TEXT NOT NULL,
+        session_key TEXT NOT NULL,
+        PRIMARY KEY (owner, course_key, session_key)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS dismissed (
         owner TEXT NOT NULL,
         course_key TEXT NOT NULL,
         session_key TEXT NOT NULL,
@@ -218,45 +227,81 @@ def save_selection(owner: str, pairs: list[tuple[str, str]]):
             )
 
 
-def get_selected_events(owner: str, start: str | None = None, end: str | None = None) -> list[dict]:
-    """start/end: ISO8601 字符串，按 dtstart 过滤范围（都不传则返回全部，用于生成完整 .ics）
-    返回值是普通 dict 列表（不是数据库专属的 Row 对象），方便其他模块用 row["字段名"] 取值，
-    不用关心底层是 SQLite 还是 Postgres。
-    """
-    query = """SELECT e.* FROM events e
-               JOIN selection s
-                 ON e.course_key = s.course_key
-                AND TRIM(LOWER(e.session_type)) = s.session_key
-               WHERE s.owner = :owner"""
-    params: dict = {"owner": owner}
+def get_dismissed(owner: str) -> set[tuple[str, str]]:
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT course_key, session_key FROM dismissed WHERE owner = :owner"), {"owner": owner}
+        ).all()
+    return {(r[0], r[1]) for r in rows}
+
+
+def add_selection_item(owner: str, course_key: str, session_type: str):
+    key = {"owner": owner, "course_key": course_key, "session_key": session_type.strip().lower()}
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM selection WHERE owner = :owner AND course_key = :course_key "
+                          "AND session_key = :session_key"), key)
+        conn.execute(text("INSERT INTO selection (owner, course_key, session_key) "
+                          "VALUES (:owner, :course_key, :session_key)"), key)
+        conn.execute(text("DELETE FROM dismissed WHERE owner = :owner AND course_key = :course_key "
+                          "AND session_key = :session_key"), key)
+
+
+def dismiss_item(owner: str, course_key: str, session_type: str):
+    key = {"owner": owner, "course_key": course_key, "session_key": session_type.strip().lower()}
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM dismissed WHERE owner = :owner AND course_key = :course_key "
+                          "AND session_key = :session_key"), key)
+        conn.execute(text("INSERT INTO dismissed (owner, course_key, session_key) "
+                          "VALUES (:owner, :course_key, :session_key)"), key)
+
+
+def get_owner_events(owner: str, start: str | None = None, end: str | None = None,
+                     include_suggested: bool = True) -> list[dict]:
+    """这个人课表里的课（status='selected'），以及需要他确认的疑似新场次（status='suggested'）。
+    匹配规则见 matching.py：老师改了场次名（如 TME → CS/TME）也能自动认出来。"""
+    selection = get_selection(owner)
+    if not selection:
+        return []
+    dismissed = get_dismissed(owner)
+
+    # 候选：用户选过的课程，以及同一课程代码（UM4IN101-...）下的所有课
+    conds, params = [], {}
+    for i, ck in enumerate(sorted({ck for ck, _ in selection})):
+        conds.append(f"course_key = :ck{i}")
+        params[f"ck{i}"] = ck
+    for i, ue in enumerate(sorted(ue_codes(selection))):
+        conds.append(f"course_key LIKE :ue{i}")
+        params[f"ue{i}"] = f"{ue}-%"
+    query = f"SELECT * FROM events WHERE ({' OR '.join(conds)})"
     if start:
-        query += " AND e.dtstart >= :start"
+        query += " AND dtstart >= :start"
         params["start"] = start
     if end:
-        query += " AND e.dtstart <= :end"
+        query += " AND dtstart <= :end"
         params["end"] = end
-    query += " ORDER BY e.dtstart"
+    query += " ORDER BY dtstart"
 
     with engine.begin() as conn:
         rows = [dict(r) for r in conn.execute(text(query), params).mappings().all()]
 
-    # 同一门课因跨系互选会在多个系的日历里被重复抓到；如果时间、课程、场次完全一致，
-    # 大概率是同一节课的重复副本（哪怕标题大小写不同，比如 'Cours' / 'cours'），
-    # 只保留一份，避免日历里同一节课出现两次。
-    seen = set()
-    deduped = []
+    result, seen = [], set()
     for row in rows:
-        dedup_key = (
-            row["course_key"],
-            row["dtstart"],
-            row["dtend"],
-            row["session_type"].strip().lower(),
-        )
+        status = classify(row["course_key"], row["session_type"], selection, dismissed)
+        if status == "hidden" or (status == "suggested" and not include_suggested):
+            continue
+        # 同一节课因跨系互选会被重复抓到（时间、课程、场次都一样），只保留一份
+        dedup_key = (row["course_key"], row["dtstart"], row["dtend"], row["session_type"].strip().lower())
         if dedup_key in seen:
             continue
         seen.add(dedup_key)
-        deduped.append(row)
-    return deduped
+        row["status"] = status
+        result.append(row)
+    return result
+
+
+def get_selected_events(owner: str, start: str | None = None, end: str | None = None) -> list[dict]:
+    """只要确定属于这个人的课（生成 .ics 订阅用，不含待确认的场次）"""
+    return get_owner_events(owner, start, end, include_suggested=False)
 
 
 def get_last_synced() -> str | None:
